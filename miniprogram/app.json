@@ -4,7 +4,8 @@
     "pages/map/index",
     "pages/mine/index",
     "pages/spot/detail",
-    "pages/spot/create"
+    "pages/spot/create",
+    "pages/legal/index"
   ],
   "window": {
     "backgroundTextStyle": "dark",

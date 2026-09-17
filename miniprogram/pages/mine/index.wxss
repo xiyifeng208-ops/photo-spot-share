@@ -78,6 +78,16 @@
   margin-top: 8rpx;
 }
 
+.spot__status {
+  display: inline-block;
+  margin-top: 8rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  background: #fff7e6;
+  color: #b45309;
+  font-size: 22rpx;
+}
+
 .spot__tags {
   margin-top: 12rpx;
 }
@@ -112,3 +122,18 @@
   margin-top: 40rpx;
 }
 
+.legal {
+  padding: 48rpx 0 40rpx;
+  text-align: center;
+}
+
+.legal__link {
+  font-size: 26rpx;
+  color: #6b7280;
+  text-decoration: underline;
+}
+
+.legal__sep {
+  margin: 0 16rpx;
+  color: #d1d5db;
+}

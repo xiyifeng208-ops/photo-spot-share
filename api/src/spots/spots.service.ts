@@ -29,6 +29,7 @@ import { GeoService } from '../geo/geo.service';
 import { StorageService } from '../storage/storage.service';
 import { UploadsService } from '../uploads/uploads.service';
 import { ContentCheckService } from './content-check.service';
+import { ContentCheckTasksService } from './content-check-tasks.service';
 import type { CreateSpotDto, GeoMetaDto, UpdateSpotDto } from './dto/spot.dto';
 
 interface SpotRow {
@@ -75,6 +76,8 @@ interface ClusterRow {
 
 export interface SpotSummary {
   id: string;
+  /** active=已公开；pending=机审中（仅作者可见）；hidden=已隐藏 */
+  status: 'active' | 'pending' | 'hidden' | 'deleted';
   title: string;
   lat: number;
   lng: number;
@@ -151,6 +154,7 @@ export class SpotsService {
     private readonly uploads: UploadsService,
     private readonly geo: GeoService,
     private readonly contentCheck: ContentCheckService,
+    private readonly contentCheckTasks: ContentCheckTasksService,
   ) {}
 
   /** 视野内点位；低 zoom 走城市聚合，避免全国视图一次拉几千个 marker。 */
@@ -221,7 +225,8 @@ export class SpotsService {
     if (!row || row.status === 'deleted') {
       throw AppException.notFound('该打卡点不存在或已被删除');
     }
-    if (row.status === 'hidden' && row.user_id !== viewerId) {
+    // pending（机审中）和 hidden（已隐藏）都只对作者本人可见
+    if (row.status !== 'active' && row.user_id !== viewerId) {
       throw AppException.notFound('该打卡点正在审核中');
     }
 
@@ -322,14 +327,16 @@ export class SpotsService {
     };
   }
 
-  async create(userId: string, dto: CreateSpotDto): Promise<SpotDetail> {
+  async create(user: { id: string; openid: string }, dto: CreateSpotDto): Promise<SpotDetail> {
+    const userId = user.id;
     this.assertCoordinates(dto.lat, dto.lng);
     const meta = await this.resolveGeoMeta(dto.lat, dto.lng, dto.geo);
+    // 文本机审要用真实 openid（微信接口要求），不能用数据库里的用户 id
     const audit = await this.contentCheck.checkText(
-      userId,
+      user.openid,
       `${dto.title} ${dto.description ?? ''} ${dto.accessNote ?? ''}`,
     );
-    const status = audit.pass ? 'active' : 'hidden';
+    const textStatus: 'active' | 'hidden' = audit.pass ? 'active' : 'hidden';
 
     const spotId = await this.db.withTransaction(async (client) => {
       await this.uploads.assertUsableKeys(userId, dto.photoKeys, { client });
@@ -361,13 +368,28 @@ export class SpotsService {
           dto.focalLength ?? null,
           dto.difficulty ?? 1,
           dto.accessNote?.trim() || null,
-          status,
+          textStatus,
         ],
       );
       const id = rows[0].id;
       await this.attachPhotos(client, userId, id, dto.photoKeys);
       return id;
     });
+
+    // 文本通过后再送图片机审：提交成功就把机位挂在 pending，等回调转正
+    if (textStatus === 'active') {
+      const waiting = await this.contentCheckTasks.submitForSpot({
+        spotId,
+        openid: user.openid,
+        photoKeys: dto.photoKeys,
+      });
+      if (waiting) {
+        await this.db.query(
+          `UPDATE spots SET status = 'pending', updated_at = now() WHERE id = $1`,
+          [spotId],
+        );
+      }
+    }
 
     return this.findDetail(spotId, userId);
   }
@@ -543,6 +565,7 @@ export class SpotsService {
     const bestTimes = toStringArray(row.best_times) as BestTime[];
     return {
       id: row.id,
+      status: row.status,
       title: row.title,
       lat: Number(row.lat),
       lng: Number(row.lng),

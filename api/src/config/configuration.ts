@@ -15,6 +15,8 @@ export interface AppConfig {
   wechat: {
     appId: string;
     appSecret: string;
+    /** 小程序后台「消息推送」里配置的 Token，用于校验回调签名 */
+    callbackToken: string;
   };
   amap: {
     key: string;
@@ -37,6 +39,8 @@ export interface AppConfig {
     spotPerDay: number;
   };
   contentCheckEnabled: boolean;
+  /** 运营接口令牌；为空则关闭运营接口 */
+  adminToken: string;
 }
 
 function bool(value: string | undefined, fallback = false): boolean {
@@ -71,6 +75,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     wechat: {
       appId: env.WX_APPID ?? '',
       appSecret: env.WX_SECRET ?? '',
+      callbackToken: env.WX_CALLBACK_TOKEN ?? '',
     },
     amap: {
       key: env.AMAP_KEY ?? '',
@@ -93,8 +98,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       spotPerDay: int(env.RATE_LIMIT_SPOT_PER_DAY, 20),
     },
     contentCheckEnabled: bool(env.CONTENT_CHECK_ENABLED, false),
+    adminToken: env.ADMIN_TOKEN ?? '',
   };
 }
 
 export const APP_CONFIG = 'APP_CONFIG';
-

@@ -202,6 +202,39 @@
   margin-top: 40rpx;
 }
 
+.agree {
+  display: flex;
+  align-items: center;
+  margin-bottom: 28rpx;
+}
+
+.agree__box {
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  text-align: center;
+  border: 2rpx solid #d1d5db;
+  border-radius: 8rpx;
+  color: #fff;
+  font-size: 26rpx;
+  flex-shrink: 0;
+}
+
+.agree__box--on {
+  background: #12a594;
+  border-color: #12a594;
+}
+
+.agree__text {
+  margin-left: 16rpx;
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.agree__link {
+  color: #12a594;
+}
+
 .form__tip {
   margin-top: 20rpx;
   text-align: center;

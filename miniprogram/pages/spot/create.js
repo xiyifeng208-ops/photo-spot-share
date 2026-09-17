@@ -36,6 +36,7 @@ Page({
 
     photos: [],
     maxPhotos: config.maxPhotos,
+    agreed: false,
 
     headingOptions: format.HEADING_OPTIONS,
     bestTimeOptions: format.BEST_TIME_OPTIONS,
@@ -242,6 +243,14 @@ Page({
     this.setData({ step: 1 });
   },
 
+  onToggleAgree() {
+    this.setData({ agreed: !this.data.agreed });
+  },
+
+  onOpenLegal(event) {
+    wx.navigateTo({ url: `/pages/legal/index?type=${event.currentTarget.dataset.type}` });
+  },
+
   // ---------- 第二步：表单 ----------
 
   onInput(event) {
@@ -317,6 +326,10 @@ Page({
       wx.showToast({ title: '至少上传 1 张样张', icon: 'none' });
       return;
     }
+    if (!this.data.isEdit && !this.data.agreed) {
+      wx.showToast({ title: '请先阅读并同意用户协议', icon: 'none' });
+      return;
+    }
 
     this.setData({ submitting: true });
     wx.showLoading({ title: '发布中…', mask: true });
@@ -364,7 +377,11 @@ Page({
       });
 
       wx.hideLoading();
-      wx.showToast({ title: this.data.isEdit ? '已更新' : '发布成功', icon: 'success' });
+      const pending = saved && saved.status === 'pending';
+      wx.showToast({
+        title: this.data.isEdit ? '已更新' : pending ? '已提交，审核通过后公开' : '发布成功',
+        icon: pending ? 'none' : 'success'
+      });
       setTimeout(() => {
         if (this.data.isEdit) {
           wx.navigateBack();

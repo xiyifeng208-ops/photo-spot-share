@@ -114,6 +114,28 @@ Page({
     wx.navigateTo({ url: `/pages/spot/create?id=${this.data.id}` });
   },
 
+  /** 举报（作者本人看不到这个入口） */
+  onReportTap() {
+    const reasons = ['违法违规内容', '侵犯他人权益', '虚假或误导信息', '地点敏感或危险', '其他'];
+    wx.showActionSheet({
+      itemList: reasons,
+      success: async (res) => {
+        const reason = reasons[res.tapIndex];
+        const result = await request({
+          url: `/spots/${this.data.id}/report`,
+          method: 'POST',
+          data: { reason }
+        }).catch((error) => {
+          wx.showToast({ title: error.message || '举报失败', icon: 'none' });
+          return null;
+        });
+        if (result) {
+          wx.showToast({ title: '已收到举报，我们会尽快核实', icon: 'none' });
+        }
+      }
+    });
+  },
+
   onDeleteTap() {
     const { spot } = this.data;
     if (!spot) return;

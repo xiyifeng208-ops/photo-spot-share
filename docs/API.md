@@ -41,6 +41,11 @@
 | POST | `/spots` | 创建，限流 20 次/天/用户 |
 | PATCH | `/spots/:id` | 编辑，仅作者 |
 | DELETE | `/spots/:id` | 软删除，仅作者 |
+| POST | `/spots/:id/report` | 举报机位（非作者，同一人只能报一次），body `{ reason, detail? }` |
+
+机位状态 `status`：`active`（已公开）/ `pending`（机审中，仅作者可见）/ `hidden`（已隐藏）/
+`deleted`（已删除）。开启内容机审后，新发布的机位先进 `pending`，图片机审通过后自动转 `active`。
+同一机位被 3 个不同用户举报会自动转 `hidden`。
 
 视野查询返回：
 
@@ -113,4 +118,15 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/health` | 公开。数据库与存储驱动健康状态（不带 `/api/v1` 前缀） |
+| GET/POST | `/wechat/callback` | 公开。微信消息推送回调（URL 校验 + 图片机审结果），返回纯文本，不走统一响应包装 |
 
+## 运营接口（需 header `x-admin-token`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/admin/reports?status=open\|all&limit=` | 查看举报 |
+| POST | `/admin/spots/:id/status` | body `{ status: "active"\|"hidden"\|"deleted" }` |
+| POST | `/admin/spots/:id/resolve-reports` | body `{ resolution: "resolved"\|"rejected" }` |
+| POST | `/admin/content-check/sweep` | 手动触发机审超时兜底 |
+
+`ADMIN_TOKEN` 为空时整个 `/admin` 返回 403。

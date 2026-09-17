@@ -155,7 +155,15 @@
   </view>
 
   <view class="form__actions">
+    <view class="agree" wx:if="{{!isEdit}}">
+      <view class="agree__box {{agreed ? 'agree__box--on' : ''}}" bindtap="onToggleAgree">{{agreed ? '✓' : ''}}</view>
+      <view class="agree__text">
+        <text bindtap="onToggleAgree">我已阅读并同意</text>
+        <text class="agree__link" data-type="terms" catchtap="onOpenLegal">《用户协议》</text>
+        <text class="agree__link" data-type="privacy" catchtap="onOpenLegal">《隐私政策》</text>
+      </view>
+    </view>
     <view class="btn-primary" bindtap="onSubmit">{{isEdit ? '保存修改' : '发布机位'}}</view>
-    <view class="muted form__tip">发布后其他用户可以在你标注的位置看到这个机位并直接导航</view>
+    <view class="muted form__tip">发布后其他用户可以在你标注的位置看到这个机位并直接导航；内容会先经过安全检测</view>
   </view>
 </view>

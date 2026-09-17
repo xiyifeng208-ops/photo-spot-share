@@ -67,16 +67,25 @@ function buildHarness(options: {
   const config = loadConfig({ NODE_ENV: 'test' } as NodeJS.ProcessEnv);
   const contentCheck = new ContentCheckService(config);
 
+  // 默认：没有可用的图片机审通道（内容检测关闭），机位直接发布
+  const contentCheckTasks = {
+    submitForSpot: jest.fn(async () => false),
+  };
+
   const service = new SpotsService(
     db as unknown as DatabaseService,
     storage,
     uploads as unknown as UploadsService,
     geo as unknown as GeoService,
     contentCheck,
+    contentCheckTasks as never,
   );
 
-  return { service, db, uploads, geo, calls, config };
+  return { service, db, uploads, geo, calls, config, contentCheckTasks };
 }
+
+/** create 现在接收带 openid 的用户对象（文本机审要用真实 openid） */
+const asUser = (id: string) => ({ id, openid: `dev:${id}` });
 
 const spotRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'spot-1',
@@ -311,7 +320,7 @@ describe('SpotsService', () => {
     it('境外坐标直接拒绝', async () => {
       const { service } = buildHarness();
       await expect(
-        service.create(USER_ID, { ...createDto, lat: 35.6762, lng: 139.6503 }),
+        service.create(asUser(USER_ID), { ...createDto, lat: 35.6762, lng: 139.6503 }),
       ).rejects.toThrow('只支持中国大陆');
     });
 
@@ -325,7 +334,7 @@ describe('SpotsService', () => {
         },
       });
 
-      const detail = await service.create(USER_ID, createDto);
+      const detail = await service.create(asUser(USER_ID), createDto);
 
       const insert = calls.find((call) => call.sql.includes('INSERT INTO spots'));
       expect(insert?.params[3]).toBeCloseTo(31.2397, 4);
@@ -347,7 +356,7 @@ describe('SpotsService', () => {
         },
       });
 
-      await service.create(USER_ID, {
+      await service.create(asUser(USER_ID), {
         ...createDto,
         geo: { city: '上海市', district: '黄浦区', address: '中山东一路' },
       });

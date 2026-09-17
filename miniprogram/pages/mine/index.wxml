@@ -15,6 +15,7 @@
       <view class="spot__body">
         <view class="spot__title">{{item.title}}</view>
         <view class="spot__meta muted">{{item.city || '未知城市'}} · {{item.createdText}}</view>
+        <view class="spot__status" wx:if="{{item.statusText}}">{{item.statusText}}</view>
         <view class="spot__tags">
           <text class="tag tag--soft" wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
         </view>
@@ -31,5 +32,10 @@
     <view class="muted empty__hint">把你知道的好机位标在地图上，帮到下一个人</view>
     <view class="btn-primary empty__btn" bindtap="onCreateTap">创建机位</view>
   </view>
-</view>
 
+  <view class="legal">
+    <text class="legal__link" data-type="terms" bindtap="onOpenLegal">用户协议</text>
+    <text class="legal__sep">·</text>
+    <text class="legal__link" data-type="privacy" bindtap="onOpenLegal">隐私政策</text>
+  </view>
+</view>

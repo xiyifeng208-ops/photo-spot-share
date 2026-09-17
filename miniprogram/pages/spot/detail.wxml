@@ -64,6 +64,8 @@
       <view class="danger__btn" bindtap="onEditTap">编辑机位</view>
       <view class="danger__btn danger__btn--danger" bindtap="onDeleteTap">删除机位</view>
     </view>
+
+    <view class="report muted" wx:if="{{!spot.isMine}}" bindtap="onReportTap">举报该机位</view>
   </view>
 
   <view class="actionbar">
@@ -74,4 +76,3 @@
 
 <view class="empty" wx:elif="{{loading}}">加载中…</view>
 <view class="empty" wx:else>机位不存在或已被删除</view>
-

@@ -97,6 +97,7 @@ pageA.setData({
   addressText: '未接入逆地理编码（服务端没配高德 Key），请在下方手动填写地址',
   addressInput: '上海市黄浦区中山东一路 27 号',
   title: '外滩测试机位',
+  agreed: true,
   photos: [{ key: 'uploads/user/20260915/a.jpg', url: 'http://localhost:3000/static/a.jpg' }]
 });
 
@@ -192,6 +193,25 @@ check(
 check('不再谎称"没配高德 Key"', !/没配高德 Key/.test(pageD.data.addressText));
 check('保留手动填写作为兜底', /手动填写/.test(pageD.data.addressText));
 check('不再提示"服务端未配置"', pageD.data.geoConfigured === true);
+
+// ---------- 场景 E：未同意协议时不能发布 ----------
+console.log('\n场景 E：发布前的协议确认');
+globalThis.wx = makeWx({ reverseConfigured: false });
+const pageE = loadCreatePage();
+pageE.onLoad({});
+pageE.setData({
+  title: '未同意协议的机位',
+  photos: [{ key: 'uploads/user/20260915/a.jpg', url: 'http://localhost:3000/static/a.jpg' }],
+  agreed: false
+});
+await pageE.onSubmit();
+await wait(100);
+check(
+  '未勾选同意时不发出创建请求',
+  globalThis.wx.__requests.filter((r) => r.url.endsWith('/spots')).length === 0,
+  globalThis.wx.__requests.map((r) => r.url).join(', ') || '(无请求)'
+);
+check('勾选状态可切换', (() => { pageE.onToggleAgree(); return pageE.data.agreed === true; })());
 
 const passed = results.filter(Boolean).length;
 console.log(`\n结果：${passed}/${results.length} 项通过`);

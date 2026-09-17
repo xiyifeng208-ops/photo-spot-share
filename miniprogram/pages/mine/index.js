@@ -6,7 +6,10 @@ function decorate(spot) {
   return {
     ...spot,
     createdText: format.formatDate(spot.createdAt),
-    tagList: format.buildTags(spot)
+    tagList: format.buildTags(spot),
+    // 机审中的机位只有作者自己能看到，这里明确标出来，避免以为没发出去
+    statusText:
+      spot.status === 'pending' ? '审核中' : spot.status === 'hidden' ? '已隐藏' : ''
   };
 }
 
@@ -70,6 +73,10 @@ Page({
 
   onCreateTap() {
     wx.navigateTo({ url: '/pages/spot/create' });
+  },
+
+  onOpenLegal(event) {
+    const type = event.currentTarget.dataset.type;
+    wx.navigateTo({ url: `/pages/legal/index?type=${type}` });
   }
 });
-

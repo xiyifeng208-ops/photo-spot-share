@@ -49,6 +49,8 @@ cp deploy/.env.example deploy/.env && vim deploy/.env
 - `AUTH_DEV_MODE=false`（生产禁止 dev 登录）
 - `WX_APPID` / `WX_SECRET` / `AMAP_KEY`
 - `STORAGE_DRIVER=cos` 时补齐 `COS_*` 与 `CDN_BASE_URL`
+- `CONTENT_CHECK_ENABLED=true`（打开内容机审）与 `WX_CALLBACK_TOKEN`（消息推送 Token）
+- `ADMIN_TOKEN`（运营接口令牌，留空则运营接口关闭）
 
 ## 2. 启动
 

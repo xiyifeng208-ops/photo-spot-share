@@ -128,6 +128,12 @@
   margin-right: 0;
 }
 
+.report {
+  padding: 16rpx 8rpx 40rpx;
+  text-align: center;
+  text-decoration: underline;
+}
+
 .actionbar {
   position: fixed;
   left: 0;
@@ -162,4 +168,3 @@
   font-size: 30rpx;
   font-weight: 500;
 }
-

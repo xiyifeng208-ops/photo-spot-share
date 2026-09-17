@@ -14,6 +14,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { HealthController } from './health.controller';
 import { OrphanCleanupService } from './tasks/orphan-cleanup.service';
 import { RequestContextMiddleware } from './common/request-context.middleware';
+import { AdminController } from './admin/admin.controller';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { RequestContextMiddleware } from './common/request-context.middleware';
     UploadsModule,
     SpotsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, AdminController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },

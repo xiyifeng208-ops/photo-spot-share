@@ -15,14 +15,22 @@ import { Public, type RequestUser } from '../common/guards/jwt-auth.guard';
 import { RateLimit } from '../common/guards/rate-limit.guard';
 import { APP_CONFIG } from '../config/configuration';
 import type { AppConfig } from '../config/configuration';
-import { CreateSpotDto, ListFeedQueryDto, ListSpotsQueryDto, UpdateSpotDto } from './dto/spot.dto';
+import {
+  CreateSpotDto,
+  ListFeedQueryDto,
+  ListSpotsQueryDto,
+  ReportSpotDto,
+  UpdateSpotDto,
+} from './dto/spot.dto';
 import { SpotsService } from './spots.service';
+import { ModerationService } from './moderation.service';
 
 @Controller('spots')
 export class SpotsController {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly spotsService: SpotsService,
+    private readonly moderation: ModerationService,
   ) {}
 
   /** 地图视野查询。未登录也能浏览。 */
@@ -80,7 +88,23 @@ export class SpotsController {
     windowMs: 24 * 60 * 60 * 1000,
   })
   create(@CurrentUser() user: RequestUser, @Body() dto: CreateSpotDto) {
-    return this.spotsService.create(user.id, dto);
+    return this.spotsService.create(user, dto);
+  }
+
+  /** 举报机位（非作者）。同一个人对同一个机位只能报一次。 */
+  @Post(':id/report')
+  @RateLimit({ scope: 'user', limit: 10, windowMs: 60 * 60 * 1000 })
+  report(
+    @CurrentUser() user: RequestUser,
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) id: string,
+    @Body() dto: ReportSpotDto,
+  ) {
+    return this.moderation.reportSpot({
+      spotId: id,
+      reporterId: user.id,
+      reason: dto.reason,
+      detail: dto.detail,
+    });
   }
 
   @Patch(':id')
@@ -107,4 +131,3 @@ function toLatLng(lat?: string, lng?: string) {
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return null;
   return { lat: parsedLat, lng: parsedLng };
 }
-

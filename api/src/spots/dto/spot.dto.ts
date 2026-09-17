@@ -1,4 +1,5 @@
 import { Type } from 'class-transformer';
+import { REPORT_REASONS } from '../moderation.service';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -208,4 +209,14 @@ export class ListFeedQueryDto {
   @IsOptional()
   @IsString()
   limit?: string;
+}
+
+export class ReportSpotDto {
+  @IsIn(REPORT_REASONS as unknown as string[], { message: '举报原因不合法' })
+  reason!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200, { message: '补充说明最多 200 个字' })
+  detail?: string;
 }

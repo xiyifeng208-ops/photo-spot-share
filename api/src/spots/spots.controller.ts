@@ -1,0 +1,110 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public, type RequestUser } from '../common/guards/jwt-auth.guard';
+import { RateLimit } from '../common/guards/rate-limit.guard';
+import { APP_CONFIG } from '../config/configuration';
+import type { AppConfig } from '../config/configuration';
+import { CreateSpotDto, ListFeedQueryDto, ListSpotsQueryDto, UpdateSpotDto } from './dto/spot.dto';
+import { SpotsService } from './spots.service';
+
+@Controller('spots')
+export class SpotsController {
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly spotsService: SpotsService,
+  ) {}
+
+  /** 地图视野查询。未登录也能浏览。 */
+  @Public()
+  @Get()
+  async list(
+    @Query() query: ListSpotsQueryDto,
+    @Query('viewerLat') viewerLat?: string,
+    @Query('viewerLng') viewerLng?: string,
+  ) {
+    const viewer = toLatLng(viewerLat, viewerLng);
+    return this.spotsService.findInView({
+      bboxRaw: query.bbox,
+      zoomRaw: query.zoom,
+      limitRaw: query.limit,
+      viewer,
+    });
+  }
+
+  @Public()
+  @Get('feed')
+  async feed(@Query() query: ListFeedQueryDto, @Query('viewerLat') viewerLat?: string, @Query('viewerLng') viewerLng?: string) {
+    return this.spotsService.findFeed({
+      city: query.city,
+      cursor: query.cursor,
+      limitRaw: query.limit,
+      viewer: toLatLng(viewerLat, viewerLng),
+    });
+  }
+
+  @Get('mine')
+  async mine(
+    @CurrentUser() user: RequestUser,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.spotsService.findMine(user.id, cursor, limit);
+  }
+
+  @Public()
+  @Get(':id')
+  async detail(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) id: string,
+    @CurrentUser(false) user?: RequestUser,
+    @Query('viewerLat') viewerLat?: string,
+    @Query('viewerLng') viewerLng?: string,
+  ) {
+    return this.spotsService.findDetail(id, user?.id, toLatLng(viewerLat, viewerLng));
+  }
+
+  @Post()
+  @RateLimit({
+    scope: 'user-and-route',
+    limit: 20,
+    windowMs: 24 * 60 * 60 * 1000,
+  })
+  create(@CurrentUser() user: RequestUser, @Body() dto: CreateSpotDto) {
+    return this.spotsService.create(user.id, dto);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser() user: RequestUser,
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) id: string,
+    @Body() dto: UpdateSpotDto,
+  ) {
+    return this.spotsService.update(user.id, id, dto);
+  }
+
+  @Delete(':id')
+  remove(
+    @CurrentUser() user: RequestUser,
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) id: string,
+  ) {
+    return this.spotsService.softDelete(user.id, id);
+  }
+}
+
+function toLatLng(lat?: string, lng?: string) {
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return null;
+  return { lat: parsedLat, lng: parsedLng };
+}
+

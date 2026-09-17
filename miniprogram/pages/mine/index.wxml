@@ -1,0 +1,35 @@
+<view class="page">
+  <view class="profile card">
+    <view class="profile__avatar">{{user && user.nickname ? user.nickname[0] : '我'}}</view>
+    <view class="profile__body">
+      <view class="profile__name">{{user && user.nickname ? user.nickname : '未命名摄影师'}}</view>
+      <view class="muted">已分享 {{spots.length}} 个机位</view>
+    </view>
+    <view class="profile__action" bindtap="onCreateTap">＋ 新建</view>
+  </view>
+
+  <view class="card spot" wx:for="{{spots}}" wx:key="id">
+    <view class="spot__main" data-id="{{item.id}}" bindtap="onSpotTap">
+      <image class="spot__cover" src="{{item.coverUrl}}" mode="aspectFill" wx:if="{{item.coverUrl}}"></image>
+      <view class="spot__cover spot__cover--empty" wx:else>无图</view>
+      <view class="spot__body">
+        <view class="spot__title">{{item.title}}</view>
+        <view class="spot__meta muted">{{item.city || '未知城市'}} · {{item.createdText}}</view>
+        <view class="spot__tags">
+          <text class="tag tag--soft" wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="spot__actions">
+      <view class="spot__btn" data-id="{{item.id}}" bindtap="onEditTap">编辑</view>
+      <view class="spot__btn spot__btn--danger" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onDeleteTap">删除</view>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{!spots.length && !loading}}">
+    <view>你还没有分享过机位</view>
+    <view class="muted empty__hint">把你知道的好机位标在地图上，帮到下一个人</view>
+    <view class="btn-primary empty__btn" bindtap="onCreateTap">创建机位</view>
+  </view>
+</view>
+

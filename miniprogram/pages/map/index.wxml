@@ -1,0 +1,64 @@
+<view class="map-page">
+  <map
+    id="spotMap"
+    class="map"
+    latitude="{{latitude}}"
+    longitude="{{longitude}}"
+    scale="{{scale}}"
+    markers="{{markers}}"
+    show-location="{{located}}"
+    enable-rotate="{{false}}"
+    enable-overlooking="{{false}}"
+    bindregionchange="onRegionChange"
+    bindmarkertap="onMarkerTap"
+    bindupdated="onMapReady"
+    binderror="onMapError"
+    bindtap="onMapTap"
+  ></map>
+
+  <view class="topbar">
+    <view class="topbar__title">{{mode === 'cluster' ? '按城市聚合' : '机位地图'}}</view>
+    <view class="topbar__sub" wx:if="{{loading}}">加载中…</view>
+    <view class="topbar__sub" wx:elif="{{truncated}}">点位较多，放大地图查看更精确的机位</view>
+    <view class="topbar__sub" wx:elif="{{tip}}">{{tip}}</view>
+    <view class="topbar__debug" wx:if="{{debug}}">{{debugLine}}</view>
+  </view>
+
+  <view class="fallback" wx:if="{{mapFailed}}">
+    <view class="fallback__title">{{failReason === 'map' ? '地图没能渲染出来' : (failReason === 'region' ? '拿不到地图视野' : '机位加载失败')}}</view>
+    <view class="fallback__desc">{{fallbackDesc}}</view>
+    <view class="fallback__desc" wx:if="{{fallbackSummary}}">{{fallbackSummary}}</view>
+    <view class="fallback__actions">
+      <view class="fallback__btn" bindtap="onRetryTap">重新进入页面</view>
+      <view class="fallback__btn fallback__btn--primary" bindtap="onGoDiscover">去发现页看列表</view>
+    </view>
+  </view>
+
+  <view class="locate-btn" bindtap="onLocateTap">
+    <text class="locate-btn__icon">◎</text>
+    <text>{{located ? '回到我的位置' : '开启定位'}}</text>
+  </view>
+
+  <view class="fab" bindtap="onCreateTap">＋ 机位</view>
+
+  <view class="card" wx:if="{{selected}}" catchtap="onCardTap">
+    <view class="card__row">
+      <image class="card__cover" src="{{selected.coverUrl}}" mode="aspectFill" wx:if="{{selected.coverUrl}}"></image>
+      <view class="card__cover card__cover--empty" wx:else>暂无照片</view>
+      <view class="card__body">
+        <view class="card__title">{{selected.title}}</view>
+        <view class="card__meta">
+          <text wx:if="{{selected.city}}">{{selected.city}}</text>
+          <text wx:if="{{selected.distanceText}}" class="card__distance">{{selected.distanceText}}</text>
+        </view>
+        <view class="card__tags">
+          <text class="tag tag--soft" wx:for="{{selected.tagList}}" wx:key="*this">{{item}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="card__actions">
+      <view class="card__action card__action--ghost" catchtap="onCardClose">收起</view>
+      <view class="card__action card__action--primary" catchtap="onCardNavigate">导航到这里</view>
+    </view>
+  </view>
+</view>

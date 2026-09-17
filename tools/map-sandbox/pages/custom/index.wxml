@@ -1,0 +1,16 @@
+<view class="map-page">
+  <map
+    id="spotMap"
+    class="map"
+    latitude="31.2397"
+    longitude="121.4903"
+    scale="14"
+    bindupdated="onUpdated"
+    binderror="onError"
+  ></map>
+  <view class="topbar">
+    <view class="topbar__title">和正式项目一样：custom 导航 + 100vh</view>
+    <view class="topbar__sub">{{status}}</view>
+  </view>
+</view>
+

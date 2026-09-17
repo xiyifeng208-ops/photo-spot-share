@@ -1,0 +1,35 @@
+{
+  "pages": [
+    "pages/discover/index",
+    "pages/map/index",
+    "pages/mine/index",
+    "pages/spot/detail",
+    "pages/spot/create"
+  ],
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "机位地图",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f6f8"
+  },
+  "tabBar": {
+    "color": "#8a8f99",
+    "selectedColor": "#12a594",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/discover/index", "text": "发现" },
+      { "pagePath": "pages/map/index", "text": "地图" },
+      { "pagePath": "pages/mine/index", "text": "我的" }
+    ]
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于在地图上定位你附近的拍摄机位并计算导航距离"
+    }
+  },
+  "requiredPrivateInfos": ["getLocation"],
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

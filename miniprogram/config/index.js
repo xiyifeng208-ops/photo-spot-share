@@ -44,8 +44,8 @@ module.exports = {
   ENV,
   ...current,
   // 打开后地图页会在顶栏显示一行调试信息（updated 事件次数 / getRegion 结果 / 已等待秒数）。
-  // 排查渲染问题用，平时可以关掉。
-  debug: true,
+  // 排查地图渲染问题时才需要打开；演示前保持关闭，否则顶栏会有调试灰字。
+  debug: false,
   // 地图默认视角：大陆中心，防止拿不到定位时出现空白地图
   defaultCenter: { latitude: 34.2, longitude: 108.9, scale: 4 },
   // zoom 小于该值时后端返回城市聚合点

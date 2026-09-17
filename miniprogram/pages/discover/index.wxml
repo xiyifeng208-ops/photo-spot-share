@@ -7,7 +7,16 @@
   </view>
 
   <view class="card spot" wx:for="{{spots}}" wx:key="id" data-id="{{item.id}}" bindtap="onSpotTap">
-    <image class="spot__cover" src="{{item.coverUrl}}" mode="aspectFill" wx:if="{{item.coverUrl}}"></image>
+    <view class="spot__cover" wx:if="{{item.coverUrl}}">
+      <image
+        class="spot__cover-img"
+        src="{{item.coverUrl}}"
+        mode="aspectFill"
+        data-id="{{item.id}}"
+        binderror="onCoverError"
+      ></image>
+    </view>
+    <view class="spot__cover spot__cover--empty" wx:elif="{{item.coverFailed}}">封面加载失败</view>
     <view class="spot__cover spot__cover--empty" wx:else>暂无照片</view>
     <view class="spot__body">
       <view class="spot__title">{{item.title}}</view>
@@ -29,4 +38,3 @@
 
   <view class="footer muted" wx:if="{{spots.length}}">{{finished ? '没有更多了' : '上拉加载更多'}}</view>
 </view>
-

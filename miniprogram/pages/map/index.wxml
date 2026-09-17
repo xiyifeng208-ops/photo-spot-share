@@ -43,7 +43,9 @@
 
   <view class="card" wx:if="{{selected}}" catchtap="onCardTap">
     <view class="card__row">
-      <image class="card__cover" src="{{selected.coverUrl}}" mode="aspectFill" wx:if="{{selected.coverUrl}}"></image>
+      <view class="card__cover" wx:if="{{selected.coverUrl}}">
+        <image class="card__cover-img" src="{{selected.coverUrl}}" mode="aspectFill"></image>
+      </view>
       <view class="card__cover card__cover--empty" wx:else>暂无照片</view>
       <view class="card__body">
         <view class="card__title">{{selected.title}}</view>

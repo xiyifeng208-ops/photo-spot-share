@@ -34,6 +34,13 @@
   border-radius: 16rpx;
   background: #f3f4f6;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.spot__cover-img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .spot__cover--empty {
@@ -85,4 +92,3 @@
   padding: 24rpx 0 60rpx;
   text-align: center;
 }
-

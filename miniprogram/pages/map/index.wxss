@@ -137,6 +137,13 @@
   border-radius: 16rpx;
   background: #f3f4f6;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.card__cover-img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .card__cover--empty {

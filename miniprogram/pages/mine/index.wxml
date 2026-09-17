@@ -10,7 +10,9 @@
 
   <view class="card spot" wx:for="{{spots}}" wx:key="id">
     <view class="spot__main" data-id="{{item.id}}" bindtap="onSpotTap">
-      <image class="spot__cover" src="{{item.coverUrl}}" mode="aspectFill" wx:if="{{item.coverUrl}}"></image>
+      <view class="spot__cover" wx:if="{{item.coverUrl}}">
+        <image class="spot__cover-img" src="{{item.coverUrl}}" mode="aspectFill"></image>
+      </view>
       <view class="spot__cover spot__cover--empty" wx:else>无图</view>
       <view class="spot__body">
         <view class="spot__title">{{item.title}}</view>

@@ -174,6 +174,8 @@ console.log('\n场景 E：地图 5 秒后才就绪（宽限期内不能误报失
 globalThis.wx = makeWx({ mapCallbackStyle: 'late', lateMs: 5000, spotsResponse: ONE_SPOT });
 const pageE = loadMapPage();
 pageE.onLoad();
+// 配置里 debug 默认关闭（演示不带调试灰字），这里显式打开以验证调试信息机制本身
+pageE.setData({ debug: true });
 setTimeout(() => pageE.onMapReady(), 5000);
 await wait(3800);
 check(

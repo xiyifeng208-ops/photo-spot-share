@@ -108,6 +108,16 @@ Page({
     wx.navigateTo({ url: `/pages/spot/detail?id=${id}` });
   },
 
+  /** 封面加载失败时标出来，避免"静默空白"让人以为是没图 */
+  onCoverError(event) {
+    const id = event.currentTarget.dataset.id;
+    console.warn('[cover] 封面加载失败', id, event.detail);
+    const spots = this.data.spots.map((spot) =>
+      spot.id === id ? { ...spot, coverFailed: true, coverUrl: '' } : spot
+    );
+    this.setData({ spots });
+  },
+
   onCreateTap() {
     wx.navigateTo({ url: '/pages/spot/create' });
   }

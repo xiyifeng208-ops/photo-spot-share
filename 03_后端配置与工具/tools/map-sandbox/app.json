@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/custom/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "地图渲染沙箱",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#ffffff"
+  },
+  "sitemapLocation": "sitemap.json"
+}

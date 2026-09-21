@@ -1,0 +1,28 @@
+@import "./index.wxss";
+.route-heading { padding: 30rpx; }
+.route-heading__meta { color: #63747c; font-size: 23rpx; line-height: 1.8; }
+.route-heading__meta .demo-badge { margin-left: 10rpx; }
+.route-heading__title { font-size: 37rpx; font-weight: 650; margin-top: 14rpx; line-height: 1.5; }
+.route-heading__theme { margin-top: 16rpx; color: #0d8578; font-size: 25rpx; }
+.route-heading__summary { font-size: 26rpx; margin-top: 18rpx; line-height: 1.8; color: #55606b; }
+.route-heading__updated { font-size: 22rpx; margin-top: 16rpx; }
+.section-title { font-size: 30rpx; font-weight: 600; margin-top: 30rpx; }
+.section-hint { font-size: 23rpx; line-height: 1.7; margin: 10rpx 0 22rpx; }
+.stop { margin-bottom: 32rpx; }
+.stop__step { display: flex; align-items: center; margin: 18rpx 0; }
+.stop__number { display: flex; width: 44rpx; height: 44rpx; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 50%; color: #fff; background: #12a594; font-size: 25rpx; }
+.stop__time { color: #0d8578; font-size: 26rpx; margin-left: 16rpx; }
+.spot-card { display: flex; padding: 20rpx; gap: 20rpx; margin-bottom: 0; }
+.spot-card__cover { width: 175rpx; height: 168rpx; border-radius: 14rpx; flex-shrink: 0; }
+.spot-card__cover--empty { display: flex; align-items: center; justify-content: center; background: #f3f4f6; color: #9ca3af; font-size: 23rpx; }
+.spot-card__body { flex: 1; min-width: 0; }
+.spot-card__title { font-size: 28rpx; font-weight: 600; line-height: 1.5; word-break: break-all; }
+.spot-card__city { margin-top: 8rpx; font-size: 23rpx; }
+.spot-card__tags { display: flex; flex-wrap: wrap; margin-top: 10rpx; }
+.spot-card__tags .tag { margin: 0 8rpx 8rpx 0; font-size: 21rpx; }
+.spot-card__link { margin-top: 8rpx; font-size: 22rpx; color: #0d8578; }
+.stop__note { padding: 14rpx 10rpx 0 10rpx; font-size: 24rpx; line-height: 1.8; color: #65737e; }
+.preparation { padding: 26rpx; }
+.preparation .section-title { margin-top: 0; }
+.preparation__item { margin-top: 16rpx; font-size: 25rpx; line-height: 1.8; color: #55606b; }
+.spot-card__favorite-count { margin-top: 10rpx; color: #0d8578; font-size: 23rpx; }

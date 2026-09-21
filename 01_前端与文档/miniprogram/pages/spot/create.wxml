@@ -1,0 +1,181 @@
+<!-- 第一步：在地图上选点 -->
+<view class="picker" wx:if="{{step === 1}}">
+  <map
+    id="pickerMap"
+    class="picker__map"
+    latitude="{{latitude}}"
+    longitude="{{longitude}}"
+    scale="{{scale}}"
+    show-location="{{true}}"
+    bindregionchange="onRegionChange"
+    bindtouchstart="onMapTouchStart"
+  >
+    <!-- 图钉固定在屏幕中心，拖动地图来移动它；cover-view 保证在原生地图上一定可见 -->
+    <cover-view class="picker__pin">
+      <cover-image class="picker__pin-icon" src="/images/pin-center.png"></cover-image>
+    </cover-view>
+  </map>
+
+  <view class="picker__panel">
+    <view class="picker__tip muted">拖动地图，把图钉放在机位所在的位置</view>
+    <view class="picker__hint muted" wx:if="{{locating}}">正在定位到你的位置…</view>
+    <view class="picker__address">{{addressText}}</view>
+    <view class="picker__hint muted" wx:if="{{!geoConfigured}}">服务端未配置高德 Key，地址需要自己写</view>
+    <view class="draft-inline" wx:if="{{!isEdit}}"><text>{{draftStatus}}</text><text class="draft-inline__save" bindtap="onSaveDraft">{{draftSaving ? '保存中…' : '保存草稿'}}</text></view>
+    <view class="picker__actions">
+      <view class="btn-primary btn-primary--ghost picker__locate" bindtap="onUseCurrentLocation">用我的位置</view>
+      <view class="btn-primary picker__next" bindtap="onNextStep">就是这里</view>
+    </view>
+  </view>
+</view>
+
+<!-- 第二步：拍摄介绍与样张 -->
+<view class="form" wx:else>
+  <view class="draft-bar" wx:if="{{!isEdit}}">
+    <view class="draft-bar__status">{{draftStatus}}</view>
+    <view class="draft-bar__actions"><text bindtap="onSaveDraft">{{draftSaving ? '保存中…' : '保存草稿'}}</text><text bindtap="onOpenDrafts">草稿箱</text></view>
+  </view>
+  <view class="draft-warning" wx:if="{{missingPhotoCount}}">恢复时发现 {{missingPhotoCount}} 张原照片已失效，文字已保留，请重新选择照片。</view>
+  <view class="card">
+    <view class="field">
+      <view class="field__label">机位名称</view>
+      <input
+        class="field__input"
+        placeholder="例如：外滩 三件套压角机位"
+        maxlength="40"
+        value="{{title}}"
+        data-field="title"
+        bindinput="onInput"
+      />
+    </view>
+    <view class="field">
+      <view class="field__label">位置</view>
+      <view class="field__static">{{addressText}}</view>
+      <picker mode="multiSelector" range="{{regionColumns}}" value="{{regionIndices}}" bindcolumnchange="onRegionColumnChange" bindchange="onChooseRegion" bindcancel="onRegionPickerCancel" disabled="{{submitting}}"><view class="region-select">{{regionLabel}} <text>▾</text></view></picker>
+      <input
+        class="field__input field__input--address"
+        placeholder="手动填写地址，例如：上海市黄浦区中山东一路"
+        maxlength="120"
+        value="{{addressInput}}"
+        data-field="addressInput"
+        bindinput="onInput"
+      />
+      <view class="field__hint muted">请确认省市与详细地址。地址解析不完整时手动选择；普通区县可写入详细地址。</view>
+      <view class="field__link" bindtap="onBackToStep1">重新选点</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="field__label">样张（最多 {{maxPhotos}} 张）</view>
+    <view class="photos">
+      <view class="photo" wx:for="{{photos}}" wx:key="index">
+        <image class="photo__img" src="{{item.url}}" mode="aspectFill" data-index="{{index}}" bindtap="onPreviewPhoto"></image>
+        <view class="photo__remove" data-index="{{index}}" catchtap="onRemovePhoto">×</view>
+      </view>
+      <view class="photo photo--add" bindtap="onChoosePhoto" wx:if="{{photos.length < maxPhotos}}">＋</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="field__label">机位朝向</view>
+    <view class="field__hint condition-hint" wx:if="{{!bestTimes.length || !bestSeasons.length || !focalLength}}">时段、季节和焦段可选填。补充已知信息能帮助其他人筛选，不确定可以留空。</view>
+    <view class="chips">
+      <view
+        class="chip {{heading === item.value ? 'chip--active' : ''}}"
+        wx:for="{{headingOptions}}"
+        wx:key="value"
+        data-field="heading"
+        data-value="{{item.value}}"
+        bindtap="onPickSingle"
+      >{{item.label}}</view>
+    </view>
+
+    <view class="field__label field__label--gap">推荐时段（可多选）</view>
+    <view class="chips">
+      <view
+        class="chip {{item.selected ? 'chip--active' : ''}}"
+        wx:for="{{bestTimeOptions}}"
+        wx:key="value"
+        data-field="bestTimes"
+        data-value="{{item.value}}"
+        bindtap="onToggleMulti"
+      >{{item.label}}</view>
+    </view>
+
+    <view class="field__label field__label--gap">推荐季节（可多选）</view>
+    <view class="chips">
+      <view
+        class="chip {{item.selected ? 'chip--active' : ''}}"
+        wx:for="{{seasonOptions}}"
+        wx:key="value"
+        data-field="bestSeasons"
+        data-value="{{item.value}}"
+        bindtap="onToggleMulti"
+      >{{item.label}}</view>
+    </view>
+
+    <view class="field__label field__label--gap">推荐焦段</view>
+    <view class="chips">
+      <view
+        class="chip {{focalLength === item.value ? 'chip--active' : ''}}"
+        wx:for="{{focalLengthOptions}}"
+        wx:key="value"
+        data-field="focalLength"
+        data-value="{{item.value}}"
+        bindtap="onPickSingle"
+      >{{item.label}}</view>
+    </view>
+
+    <view class="field__label field__label--gap">到达难度</view>
+    <view class="chips">
+      <view class="chip {{difficulty === null ? 'chip--active' : ''}}" data-value="unknown" bindtap="onPickDifficulty">暂不确定</view>
+      <view
+        class="chip {{difficulty === item.value ? 'chip--active' : ''}}"
+        wx:for="{{difficultyOptions}}"
+        wx:key="value"
+        data-value="{{item.value}}"
+        bindtap="onPickDifficulty"
+      >{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="field">
+      <view class="field__label">怎么拍</view>
+      <textarea
+        class="field__textarea"
+        placeholder="例如：站在防汛墙内侧，用长焦把东方明珠收到画面右上角，江面留出倒影区"
+        maxlength="1000"
+        value="{{description}}"
+        data-field="description"
+        bindinput="onInput"
+      ></textarea>
+    </view>
+    <view class="field">
+      <view class="field__label">怎么到（选填）</view>
+      <textarea
+        class="field__textarea field__textarea--short"
+        placeholder="例如：地铁 2 号线南京东路站 2 号口出，步行 12 分钟"
+        maxlength="300"
+        value="{{accessNote}}"
+        data-field="accessNote"
+        bindinput="onInput"
+      ></textarea>
+    </view>
+  </view>
+
+  <view class="form__actions">
+    <view class="agree" wx:if="{{!isEdit}}">
+      <view class="agree__box {{agreed ? 'agree__box--on' : ''}}" bindtap="onToggleAgree">{{agreed ? '✓' : ''}}</view>
+      <view class="agree__text">
+        <text bindtap="onToggleAgree">我已阅读并同意</text>
+        <text class="agree__link" data-type="terms" catchtap="onOpenLegal">《用户协议》</text>
+        <text class="agree__link" data-type="privacy" catchtap="onOpenLegal">《隐私政策》</text>
+      </view>
+    </view>
+    <view class="btn-primary {{submitting ? 'submit--disabled' : ''}}" bindtap="onSubmit">{{submitting ? '提交中…' : isEdit ? '保存修改' : '发布机位'}}</view>
+    <view class="muted form__tip">公开后其他用户可查看并导航；如需审核，以提交后的状态提示为准。</view>
+  </view>
+</view>
+<view class="initializing-mask" wx:if="{{initializing}}">正在准备发布页面…</view>
+<view class="initializing-mask" wx:elif="{{editLoadError}}"><view>作品加载失败，未修改任何原信息。<view class="field__link" bindtap="onRetryEdit">重新加载</view></view></view>

@@ -1,0 +1,41 @@
+<view class="page">
+  <block wx:if="{{route}}">
+    <view class="route-heading card">
+      <view class="route-heading__meta">{{route.city}} · {{route.stopCount}} 个可用机位 <text class="demo-badge" wx:if="{{route.isDemo}}">演示路线</text></view>
+      <view class="route-heading__title">{{route.title}}</view>
+      <view class="route-heading__theme">{{route.theme}}</view>
+      <view class="route-heading__summary">{{route.summary}}</view>
+      <view class="disclaimer">{{route.disclaimer}}</view>
+      <view class="route-heading__updated muted">编排更新：{{route.updatedAt}}</view>
+    </view>
+    <view class="availability" wx:if="{{route.unavailableCount}}">原编排中有 {{route.unavailableCount}} 个机位暂不可用，以下仅展示当前公开且仍位于本城市的机位。站序保留原编号，请自行调整安排。</view>
+    <view class="section-title">建议拍摄顺序</view>
+    <view class="section-hint muted">点击机位查看详情，可在详情页收藏或使用原有导航。</view>
+    <view class="stop" wx:for="{{route.stops}}" wx:key="order">
+      <view class="stop__step"><text class="stop__number">{{item.order}}</text><text class="stop__time">{{item.suggestedTime}}</text></view>
+      <view class="spot-card card" data-id="{{item.spot.id}}" bindtap="onSpotTap" role="button" aria-label="查看{{item.spot.title}}">
+        <image wx:if="{{item.spot.coverUrl}}" class="spot-card__cover" src="{{item.spot.coverUrl}}" mode="aspectFill" data-id="{{item.spot.id}}" binderror="onCoverError"></image>
+        <view wx:else class="spot-card__cover spot-card__cover--empty">{{item.spot.coverFailed ? '封面加载失败' : '暂无照片'}}</view>
+        <view class="spot-card__body">
+          <view class="spot-card__title">{{item.spot.title}}</view>
+          <view class="spot-card__city muted">{{item.spot.city || item.spot.district}}</view>
+          <view class="spot-card__favorite-count">☆ {{item.spot.favoriteCount}} 人收藏</view>
+          <view class="spot-card__tags"><text class="tag tag--soft" wx:for="{{item.spot.tagList}}" wx:for-item="tag" wx:key="*this">{{tag}}</text></view>
+          <view class="spot-card__link">查看作品与到达提示 →</view>
+        </view>
+      </view>
+      <view class="stop__note">{{item.note}}</view>
+    </view>
+    <view class="preparation card">
+      <view class="section-title">出发前看一看</view>
+      <view class="preparation__item" wx:for="{{route.preparation}}" wx:key="*this">{{index + 1}}. {{item}}</view>
+    </view>
+  </block>
+  <view class="state" wx:if="{{loading}}">正在加载路线…</view>
+  <view class="state" wx:elif="{{error}}">
+    <view>{{error}}</view>
+    <view class="state__hint" wx:if="{{unavailable}}">路线至少需要两个公开且同城的机位。</view>
+    <view class="state__link" bindtap="onRetry" role="button">重新加载</view>
+    <view class="state__link" bindtap="onGoRoutes" role="button">查看其他路线</view>
+  </view>
+</view>

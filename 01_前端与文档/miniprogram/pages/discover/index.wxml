@@ -1,0 +1,103 @@
+<view class="page">
+  <view class="picker-mask" wx:if="{{cityPickerOpen}}" bindtap="onCloseCityPicker" catchtouchmove="onPanelTouchMove"></view>
+  <view class="filters {{cityPickerOpen ? 'filters--open' : ''}}">
+    <view class="chip chip--active" bindtap="onToggleCity" role="button" aria-label="选择城市">
+      <text class="chip__label">{{cityLabel}}</text>
+      <text class="chip__arrow">{{cityPickerOpen ? '▴' : '▾'}}</text>
+    </view>
+    <view class="search">
+      <input class="search__input" value="{{keywordInput}}" placeholder="搜索位置或作品名称" placeholder-class="search__placeholder" maxlength="100" confirm-type="search" bindfocus="onSearchFocus" bindinput="onSearchInput" bindconfirm="onSearchConfirm" />
+      <view class="search__clear" wx:if="{{keywordInput}}" bindtap="onClearSearch" role="button" aria-label="清空搜索">×</view>
+    </view>
+    <view class="city-picker" wx:if="{{cityPickerOpen}}">
+      <view class="city-picker__all {{!province && !city && !district ? 'city-picker__item--selected' : ''}}" bindtap="onSelectAllCities">全部城市</view>
+      <view class="city-picker__columns">
+        <scroll-view class="city-picker__provinces" scroll-y enhanced show-scrollbar="{{false}}">
+          <view class="city-picker__province {{pickerProvinceCode === item.code ? 'city-picker__province--selected' : ''}}" wx:for="{{provinces}}" wx:key="code" data-code="{{item.code}}" bindtap="onSelectProvince">{{item.name}}</view>
+        </scroll-view>
+        <scroll-view class="city-picker__cities" scroll-y enhanced show-scrollbar="{{false}}">
+          <view class="city-picker__city {{selectedCityCode === item.code ? 'city-picker__item--selected' : ''}}" wx:for="{{pickerCities}}" wx:key="code" data-code="{{item.code}}" bindtap="onSelectCity">{{item.name}}</view>
+        </scroll-view>
+      </view>
+    </view>
+  </view>
+
+  <view class="condition-bar">
+    <view class="condition-trigger {{selectedConditions.length ? 'condition-trigger--active' : ''}}" bindtap="onOpenShootingPicker" role="button" aria-label="选择拍摄条件">拍摄条件{{selectedConditions.length ? '（' + selectedConditions.length + '）' : ''}} ▾</view>
+    <view class="condition-hint muted" wx:if="{{!selectedConditions.length}}">时段 · 季节 · 焦段 · 难度</view>
+    <view class="condition-summary" wx:else>
+      <view class="condition-tag" wx:for="{{selectedConditions}}" wx:key="key" data-field="{{item.field}}" data-value="{{item.value}}" bindtap="onRemoveCondition" role="button" aria-label="移除{{item.label}}">{{item.label}} ×</view>
+    </view>
+  </view>
+
+  <view class="condition-mask" wx:if="{{shootingPickerOpen}}" bindtap="onCloseShootingPicker" catchtouchmove="onPanelTouchMove"></view>
+  <view class="condition-sheet" wx:if="{{shootingPickerOpen}}">
+    <view class="condition-sheet__header">
+      <view class="condition-sheet__title">拍摄条件</view>
+      <view class="condition-sheet__close" bindtap="onCloseShootingPicker" role="button" aria-label="关闭筛选">×</view>
+    </view>
+    <view class="condition-sheet__hint muted">同类选项满足任一项，不同类别同时满足</view>
+    <scroll-view class="condition-sheet__scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="condition-group" wx:for="{{filterGroups}}" wx:for-item="group" wx:key="field">
+        <view class="condition-group__title">{{group.label}}<text class="condition-group__hint muted">可多选</text></view>
+        <view class="condition-options">
+          <view class="condition-option {{option.selected ? 'condition-option--selected' : ''}}" wx:for="{{group.options}}" wx:for-item="option" wx:key="value" data-field="{{group.field}}" data-value="{{option.value}}" bindtap="onDraftConditionTap" role="button" aria-label="{{option.label}}{{option.selected ? '，已选' : ''}}">{{option.label}}</view>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="condition-sheet__actions">
+      <view class="condition-reset" bindtap="onResetDraftConditions" role="button">重置</view>
+      <view class="condition-confirm" bindtap="onConfirmConditions" role="button">确定</view>
+    </view>
+  </view>
+
+  <view class="routes-entry" bindtap="onRoutesTap" role="button" aria-label="浏览精选摄影路线">
+    <view><view class="routes-entry__title">精选摄影路线</view><view class="routes-entry__hint">把机位串成拍摄灵感 · 独立浏览</view></view>
+    <text class="routes-entry__arrow">→</text>
+  </view>
+
+  <view class="sort-hint" wx:if="{{sortHint}}">{{sortHint}}</view>
+
+  <view class="card spot" wx:for="{{spots}}" wx:key="id" data-id="{{item.id}}" bindtap="onSpotTap">
+    <view class="spot__cover" wx:if="{{item.coverUrl}}">
+      <image
+        class="spot__cover-img"
+        src="{{item.coverUrl}}"
+        mode="aspectFill"
+        data-id="{{item.id}}"
+        binderror="onCoverError"
+      ></image>
+    </view>
+    <view class="spot__cover spot__cover--empty" wx:elif="{{item.coverFailed}}">封面加载失败</view>
+    <view class="spot__cover spot__cover--empty" wx:else>暂无照片</view>
+    <view class="spot__body">
+      <view class="spot__title">{{item.title}}</view>
+      <view class="spot__meta">
+        <text>{{item.city || item.district || '未知城市'}}</text>
+        <text wx:if="{{item.distanceText}}" class="spot__distance">{{item.distanceText}}</text>
+        <text class="spot__favorite-count">☆ {{item.favoriteCount}} 人收藏</text>
+      </view>
+      <view class="spot__tags">
+        <text class="tag tag--soft" wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
+      </view>
+      <view class="spot__footer muted">{{item.author.nickname || '匿名摄影师'}} · {{item.createdText}}</view>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{!spots.length && !loading && !error}}">
+    <view>未找到符合条件的作品</view>
+    <view class="empty__hint muted">{{selectedConditions.length ? '试试减少拍摄条件，或调整城市和关键词' : (keyword ? '试试其他位置名称，或调整城市范围' : '这个范围还没有公开作品，试试全部城市')}}</view>
+    <view class="empty__actions">
+      <view class="empty__link" wx:if="{{keyword}}" bindtap="onClearSearch">清空搜索</view>
+      <view class="empty__link" wx:if="{{selectedConditions.length}}" bindtap="onClearConditions">清空拍摄条件</view>
+      <view class="empty__link" wx:if="{{province || city || district}}" bindtap="onSelectAllCities">全部城市</view>
+    </view>
+    <view class="btn-primary empty__btn" bindtap="onCreateTap">分享一个机位</view>
+  </view>
+  <view class="load-error" wx:if="{{error}}">
+    <view>{{error}}</view>
+    <view class="empty__link" bindtap="onRetry">点击重试</view>
+  </view>
+
+  <view class="footer muted" wx:if="{{!error && (spots.length || loading)}}">{{loading ? '正在加载…' : (finished ? '没有更多了' : '上拉加载更多')}}</view>
+</view>

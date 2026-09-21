@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="intro">
+    <view class="intro__eyebrow">一起寻找城市里的光</view>
+    <view class="intro__title">精选摄影路线</view>
+    <view class="intro__description">把单个机位串成拍摄灵感，逐站查看作品、收藏和到达提示。</view>
+  </view>
+  <view class="scope-note muted">独立浏览路线，不受发现页城市和拍摄条件筛选影响。</view>
+  <view class="route-card card" wx:for="{{routes}}" wx:key="id" data-id="{{item.id}}" bindtap="onRouteTap" role="button" aria-label="查看{{item.title}}">
+    <image wx:if="{{item.coverUrl}}" class="route-cover" src="{{item.coverUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="onCoverError"></image>
+    <view wx:else class="route-cover route-cover--empty">{{item.coverFailed ? '封面加载失败' : '城市光影 · 摄影灵感'}}</view>
+    <view class="route-card__content">
+      <view class="route-card__meta"><text>{{item.city}} · {{item.stopCount}} 个可用机位</text><text class="demo-badge" wx:if="{{item.isDemo}}">演示路线</text></view>
+      <view class="route-card__title">{{item.title}}</view>
+      <view class="route-card__summary">{{item.summary}}</view>
+      <view class="route-card__theme">{{item.theme}}</view>
+      <view class="availability" wx:if="{{item.unavailableCount}}">{{item.unavailableCount}} 个机位暂不可用，请查看详情后调整安排。</view>
+      <view class="disclaimer">{{item.disclaimer}}</view>
+      <view class="route-card__action">查看拍摄顺序与提示 →</view>
+    </view>
+  </view>
+  <view class="state" wx:if="{{loading}}">正在加载路线…</view>
+  <view class="state" wx:elif="{{error}}"><view>{{error}}</view><view class="state__link" bindtap="onRetry" role="button">点击重试</view></view>
+  <view class="state" wx:elif="{{!routes.length}}">
+    <view>暂无可用摄影路线</view>
+    <view class="state__hint">路线至少需要两个公开机位，稍后再来看看。</view>
+    <view class="state__link" bindtap="onGoDiscover" role="button">去发现机位</view>
+  </view>
+</view>

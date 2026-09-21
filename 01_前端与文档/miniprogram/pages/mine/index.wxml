@@ -1,0 +1,92 @@
+<view class="page">
+  <view class="profile card">
+    <view class="profile__avatar">{{user && user.nickname ? user.nickname[0] : '我'}}</view>
+    <view class="profile__body">
+      <view class="profile__name">{{user && user.nickname ? user.nickname : '未命名摄影师'}}</view>
+      <view class="muted">记录机位，收藏下一站</view>
+    </view>
+    <view class="profile__action" bindtap="onCreateTap">＋ 新建</view>
+  </view>
+
+  <view class="drafts-entry card" bindtap="onDraftsTap"><view>发布草稿 <text class="drafts-entry__hint">仅保存在本机</text></view><text>›</text></view>
+  <view class="tabs">
+    <view class="tabs__item {{activeTab === 'mine' ? 'tabs__item--active' : ''}}" data-tab="mine" bindtap="onSwitchTab">我发布的</view>
+    <view class="tabs__item {{activeTab === 'favorites' ? 'tabs__item--active' : ''}}" data-tab="favorites" bindtap="onSwitchTab">想去清单</view>
+  </view>
+
+  <view class="city-mask" wx:if="{{cityPickerOpen}}" bindtap="onCloseCityPicker" catchtouchmove="onPanelTouchMove"></view>
+  <view class="filters {{cityPickerOpen ? 'filters--open' : ''}}" wx:if="{{activeTab === 'favorites'}}">
+    <view class="filters__city" bindtap="onToggleCity">
+      <text class="filters__name">{{cityLabel}}</text><text class="filters__arrow">{{cityPickerOpen ? '▴' : '▾'}}</text>
+    </view>
+    <text class="filters__hint">按收藏时间排序</text>
+    <view class="city-picker" wx:if="{{cityPickerOpen}}">
+      <view class="city-picker__all {{!selectedCityCode ? 'city-picker__selected' : ''}}" bindtap="onSelectAllCities">全部城市</view>
+      <view class="city-picker__columns">
+        <scroll-view class="city-picker__provinces" scroll-y="{{true}}">
+          <view wx:for="{{provinces}}" wx:key="code" class="city-picker__item {{pickerProvinceCode === item.code ? 'city-picker__province--active' : ''}}" data-code="{{item.code}}" bindtap="onSelectProvince">{{item.name}}</view>
+        </scroll-view>
+        <scroll-view class="city-picker__cities" scroll-y="{{true}}">
+          <view wx:for="{{pickerCities}}" wx:key="code" class="city-picker__item {{selectedCityCode === item.code ? 'city-picker__selected' : ''}}" data-code="{{item.code}}" bindtap="onSelectCity">{{item.name}}</view>
+        </scroll-view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card spot" wx:for="{{list.spots}}" wx:key="id">
+    <view class="spot__main" data-id="{{item.id}}" bindtap="onSpotTap">
+      <view class="spot__cover" wx:if="{{item.coverUrl}}">
+        <image class="spot__cover-img" src="{{item.coverUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="onCoverError"></image>
+      </view>
+      <view class="spot__cover spot__cover--empty" wx:else>无图</view>
+      <view class="spot__body">
+        <view class="spot__title">{{item.title}}</view>
+        <view class="spot__meta muted">{{item.city || item.district || '未知城市'}} · {{item.createdText}}</view>
+        <view class="spot__favorite-count">☆ {{item.favoriteCount}} 人收藏</view>
+        <view class="spot__status" wx:if="{{item.statusText}}">{{item.statusText}}</view>
+        <view class="spot__tags">
+          <text class="tag tag--soft" wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="spot__actions" wx:if="{{activeTab === 'mine'}}">
+      <view class="spot__btn" data-id="{{item.id}}" bindtap="onEditTap">编辑</view>
+      <view class="spot__btn spot__btn--danger" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onDeleteTap">删除</view>
+    </view>
+    <view class="spot__actions" wx:else>
+      <view class="spot__btn spot__btn--favorite {{favoritePending[item.id] ? 'spot__btn--disabled' : ''}}" data-id="{{item.id}}" bindtap="onCancelFavorite">{{favoritePending[item.id] ? '处理中…' : '取消收藏'}}</view>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{!list.spots.length && !list.loading && !list.error && list.loaded}}">
+    <block wx:if="{{activeTab === 'mine'}}">
+      <view>你还没有分享过机位</view>
+      <view class="muted empty__hint">把你知道的好机位标在地图上，帮到下一个人</view>
+      <view class="btn-primary empty__btn" bindtap="onCreateTap">创建机位</view>
+    </block>
+    <block wx:elif="{{selectedCityCode}}">
+      <view>该城市暂无收藏的公开作品</view>
+      <view class="muted empty__hint">试试其他城市，或查看全部收藏</view>
+      <view class="btn-primary empty__btn" bindtap="onSelectAllCities">切换全部城市</view>
+    </block>
+    <block wx:else>
+      <view>想去清单还是空的</view>
+      <view class="muted empty__hint">去收藏喜欢的公开机位，留给下一次出发</view>
+      <view class="btn-primary empty__btn" bindtap="onGoDiscover">去发现机位</view>
+    </block>
+  </view>
+
+  <view class="list-error" wx:if="{{list.error}}">
+    <view>加载失败，请重试</view>
+    <view class="muted list-error__message">{{list.error}}</view>
+    <view class="list-error__retry" bindtap="onRetry">重试</view>
+  </view>
+  <view class="list-footer muted" wx:if="{{list.loading}}">加载中…</view>
+  <view class="list-footer muted" wx:elif="{{list.spots.length && list.finished && !list.error}}">没有更多了</view>
+
+  <view class="legal">
+    <text class="legal__link" data-type="terms" bindtap="onOpenLegal">用户协议</text>
+    <text class="legal__sep">·</text>
+    <text class="legal__link" data-type="privacy" bindtap="onOpenLegal">隐私政策</text>
+  </view>
+</view>

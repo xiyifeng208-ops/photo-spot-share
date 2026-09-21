@@ -1,0 +1,10 @@
+{
+  "desc": "机位分享属于 UGC 内容，不参与微信索引",
+  "rules": [
+    {
+      "action": "disallow",
+      "page": "*"
+    }
+  ]
+}
+

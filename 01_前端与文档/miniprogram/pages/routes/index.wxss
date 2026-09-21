@@ -1,0 +1,20 @@
+.intro { padding: 34rpx 30rpx; border-radius: 24rpx; color: #fff; background: linear-gradient(120deg, #0d8578, #12a594); }
+.intro__eyebrow { color: #d3f5ec; font-size: 23rpx; letter-spacing: 2rpx; }
+.intro__title { margin-top: 12rpx; font-size: 40rpx; font-weight: 700; }
+.intro__description { margin-top: 14rpx; font-size: 25rpx; line-height: 1.7; color: #ecfff8; }
+.scope-note { padding: 22rpx 4rpx; font-size: 22rpx; line-height: 1.6; }
+.route-card { padding: 0; overflow: hidden; margin-bottom: 24rpx; }
+.route-cover { display: block; width: 100%; height: 250rpx; }
+.route-cover--empty { display: flex; align-items: center; justify-content: center; background: #e4f1ee; color: #56877d; font-size: 26rpx; }
+.route-card__content { padding: 28rpx; }
+.route-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12rpx; font-size: 23rpx; color: #687781; }
+.demo-badge { padding: 5rpx 12rpx; border-radius: 8rpx; background: #fff3dc; color: #855d16; font-size: 21rpx; }
+.route-card__title { margin-top: 16rpx; font-size: 33rpx; font-weight: 600; line-height: 1.5; }
+.route-card__summary { margin-top: 12rpx; color: #55606b; font-size: 25rpx; line-height: 1.7; }
+.route-card__theme { margin-top: 16rpx; color: #0d8578; font-size: 24rpx; }
+.availability { margin-top: 20rpx; padding: 16rpx; border-radius: 12rpx; background: #fff6e8; color: #805b23; font-size: 23rpx; line-height: 1.6; }
+.disclaimer { margin-top: 20rpx; color: #707987; font-size: 22rpx; line-height: 1.7; }
+.route-card__action { padding-top: 22rpx; color: #0d8578; font-size: 26rpx; font-weight: 500; }
+.state { padding: 60rpx 24rpx; color: #6b7280; text-align: center; line-height: 1.7; }
+.state__link { padding: 22rpx; color: #0d8578; }
+.state__hint { margin-top: 14rpx; font-size: 24rpx; }

@@ -4,6 +4,11 @@
   "private": true,
   "description": "旅游拍照机位打卡分享 - 后端 API",
   "scripts": {
+    "db:check:mysql": "ts-node src/database/check-mysql.ts",
+    "db:verify:rehearsal": "ts-node src/database/verify-migrated-mysql.ts",
+    "db:rehearse:mysql": "node ../tools/mysql/rehearse-migration.cjs",
+    "db:migrate:remote": "node ../tools/mysql/rehearse-migration.cjs --remote",
+    "db:verify:remote": "ts-node src/database/verify-migrated-mysql.ts --remote",
     "build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
@@ -23,6 +28,7 @@
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
     "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.24.4",
     "pg": "^8.13.3",
     "qcloud-cos-sts": "^3.1.2",
     "reflect-metadata": "^0.2.2",
@@ -45,14 +51,22 @@
     "typescript": "^5.6.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
-    "setupFiles": ["<rootDir>/test-setup.ts"],
+    "setupFiles": [
+      "<rootDir>/test-setup.ts"
+    ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   }

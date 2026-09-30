@@ -173,6 +173,7 @@ export class UpdateSpotDto {
   /** 传了就整体替换：需要保留的旧图 key 也要带上。 */
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1, { message: '至少保留 1 张样张' })
   @ArrayMaxSize(MAX_PHOTOS_PER_SPOT)
   @IsString({ each: true })
   photoKeys?: string[];

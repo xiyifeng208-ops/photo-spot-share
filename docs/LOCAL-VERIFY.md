@@ -1,5 +1,21 @@
 # 本地验证指南
 
+## 已配置的 Windows 本地环境
+
+首次安装完成后，在项目根目录双击 `start-local.cmd` 即可启动便携版数据库和后端。
+脚本会复用已经运行的服务，后台运行并将日志写到 `work/logs/`，关闭启动窗口不会停止服务。
+数据库数据保存在 `work/pgdata`，当前端口为 `55432`；后端配置保存在 `api/.env`。
+浏览器打开 `http://127.0.0.1:3000/health`，应看到 `status: ok`、`database: up`。
+修改后端代码后需在 `api` 重新构建；开发时也可用 `pnpm start:dev` 启动。
+
+微信开发者工具可直接打开项目根目录（已配置 `miniprogramRoot: miniprogram/`），或单独导入
+`miniprogram/`。模拟器优先连接 `127.0.0.1:3000`；真机调试需要更新
+`miniprogram/config/index.js` 里的局域网地址。
+
+E 盘为 exFAT，不支持依赖符号链接，因此 `api/pnpm-workspace.yaml` 使用 `nodeLinker: hoisted`。
+`api/.npmrc` 同时保留旧版 pnpm 对应的设置。首次准备便携数据库时使用文档下方的官方安装包；
+在 exFAT 磁盘上解压使用 `tar -xm` 跳过文件时间恢复。
+
 ## 一条命令
 
 在项目根目录执行下面这条命令，它会按六步做分层自检；没有数据库时只跳过数据库相关步骤，不会整体报失败。

@@ -8,6 +8,9 @@ loadEnv();
 
 async function main() {
   const config = loadConfig();
+  if (!['postgres:', 'postgresql:'].includes(new URL(config.database.url).protocol)) {
+    throw new Error('开发种子脚本仅支持 PostgreSQL，不允许向 MySQL 写入或覆盖数据');
+  }
   const client = new Client({ connectionString: config.database.url });
   await client.connect();
   try {

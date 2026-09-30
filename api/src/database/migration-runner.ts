@@ -9,6 +9,9 @@ const MIGRATIONS_DIR = join(__dirname, '..', '..', 'migrations');
  * 已执行过的记录在 schema_migrations 表里，支持重复运行。
  */
 export async function runMigrations(connectionString: string, logger = console.log) {
+  if (!['postgres:', 'postgresql:'].includes(new URL(connectionString).protocol)) {
+    throw new Error('此迁移器仅支持 PostgreSQL；MySQL 请遵循 mysql-migrations/README.md，勿重复执行 baseline');
+  }
   const client = new Client({ connectionString });
   await client.connect();
 

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { PoolClient } from 'pg';
+import { randomUUID } from 'node:crypto';
+import type { DatabaseClient } from '../database/database.service';
 import { AppException } from '../common/errors';
 import { APP_CONFIG } from '../config/configuration';
 import type { AppConfig } from '../config/configuration';
@@ -48,7 +49,8 @@ export class UploadsService {
       for (const [index, key] of signed.keys.entries()) {
         const item = items[index];
         await client.query(
-          `INSERT INTO upload_tickets (user_id, object_key, mime, size_bytes, width, height)
+          this.db.isMysql ? `INSERT INTO upload_tickets (id, user_id, object_key, mime, size_bytes, width, height)
+            VALUES ($7, $1, $2, $3, $4, $5, $6)` : `INSERT INTO upload_tickets (user_id, object_key, mime, size_bytes, width, height)
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (object_key) DO UPDATE
              SET mime = EXCLUDED.mime,
@@ -62,6 +64,7 @@ export class UploadsService {
             item?.size ?? null,
             item?.width ?? null,
             item?.height ?? null,
+            ...(this.db.isMysql ? [randomUUID()] : []),
           ],
         );
       }
@@ -124,10 +127,10 @@ export class UploadsService {
   async assertUsableKeys(
     userId: string,
     keys: string[],
-    options: { client?: PoolClient; allowSpotId?: string } = {},
+    options: { client?: DatabaseClient; allowSpotId?: string } = {},
   ) {
     const { client, allowSpotId } = options;
-    if (keys.length === 0) return;
+    if (keys.length === 0) throw AppException.badRequest('至少上传 1 张样张');
     if (keys.length > MAX_PHOTOS_PER_SPOT) {
       throw AppException.badRequest(`每个打卡点最多 ${MAX_PHOTOS_PER_SPOT} 张样张`);
     }
@@ -141,12 +144,13 @@ export class UploadsService {
       }
     }
 
-    const sql = `SELECT id, user_id, object_key, spot_id
+    const sql = this.db.isMysql ? `SELECT id, user_id, object_key, spot_id FROM upload_tickets
+      WHERE object_key IN (${unique.map((_, i) => `$${i + 1}`).join(',')}) ORDER BY object_key ${client ? 'FOR UPDATE' : ''}` : `SELECT id, user_id, object_key, spot_id
                    FROM upload_tickets
                   WHERE object_key = ANY($1::text[])`;
     const { rows } = client
-      ? await client.query<UploadTicketRow>(sql, [unique])
-      : await this.db.query<UploadTicketRow>(sql, [unique]);
+      ? await client.query<UploadTicketRow>(sql, this.db.isMysql ? unique : [unique])
+      : await this.db.query<UploadTicketRow>(sql, this.db.isMysql ? unique : [unique]);
 
     if (rows.length !== unique.length) {
       throw AppException.badRequest('部分图片未完成上传，请重试');
@@ -161,6 +165,7 @@ export class UploadsService {
 
   /** 清理超过 TTL 仍未发布的图片：先删对象存储，再删票据。 */
   async cleanupOrphans(ttlHours = ORPHAN_TICKET_TTL_HOURS): Promise<{ removed: number }> {
+    if (this.db.isMysql) return this.cleanupMysqlOrphans(ttlHours);
     const { rows } = await this.db.query<{ object_key: string; id: string }>(
       `SELECT id, object_key
          FROM upload_tickets
@@ -183,5 +188,25 @@ export class UploadsService {
       this.logger.log(`已清理 ${rows.length} 个未使用的上传票据`);
     }
     return { removed: rows.length };
+  }
+
+  private async cleanupMysqlOrphans(ttlHours: number): Promise<{ removed: number }> {
+    const candidates = await this.db.query<{ id: string }>(`SELECT id FROM upload_tickets
+      WHERE spot_id IS NULL AND created_at < TIMESTAMPADD(HOUR, -$1, now()) LIMIT 500`, [ttlHours]);
+    let removed = 0;
+    for (const candidate of candidates.rows) {
+      try {
+        const deleted = await this.db.withTransaction(async client => {
+          const row = (await client.query<UploadTicketRow>(`SELECT id, object_key, spot_id, user_id FROM upload_tickets
+            WHERE id = $1 AND spot_id IS NULL AND created_at < TIMESTAMPADD(HOUR, -$2, now()) FOR UPDATE`, [candidate.id, ttlHours])).rows[0];
+          if (!row) return false;
+          await this.storage.driver.deleteObject(row.object_key);
+          await client.query('DELETE FROM upload_tickets WHERE id = $1', [row.id]);
+          return true;
+        });
+        if (deleted) removed++;
+      } catch (error) { this.logger.warn(`清理孤儿图片失败: ${(error as Error).message}`); }
+    }
+    return { removed };
   }
 }

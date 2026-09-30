@@ -2,8 +2,11 @@ node_modules/
 dist/
 .env
 .env.local
-var/
+.env.mysql-check
+# 后端本地上传文件和其他运行时数据
+/api/var/
 coverage/
+work/
 *.log
 .DS_Store
 miniprogram/miniprogram_npm/

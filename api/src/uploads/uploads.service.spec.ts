@@ -125,9 +125,9 @@ describe('UploadsService', () => {
   });
 
   describe('assertUsableKeys', () => {
-    it('空数组直接通过', async () => {
+    it('空数组不能发布无照片机位', async () => {
       const { service } = buildService();
-      await expect(service.assertUsableKeys(USER_ID, [])).resolves.toBeUndefined();
+      await expect(service.assertUsableKeys(USER_ID, [])).rejects.toThrow('至少上传 1 张样张');
     });
 
     it('图片归属他人时拒绝', async () => {

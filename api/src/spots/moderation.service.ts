@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AppException } from '../common/errors';
 import { DatabaseService } from '../database/database.service';
 
@@ -36,6 +37,7 @@ export class ModerationService {
     reason: string;
     detail?: string;
   }): Promise<{ reported: true; hidden: boolean }> {
+    if (this.db.isMysql) return this.reportMysql(params);
     const spot = await this.db.queryOne<{ id: string; user_id: string; status: string }>(
       'SELECT id, user_id, status FROM spots WHERE id = $1',
       [params.spotId],
@@ -69,6 +71,26 @@ export class ModerationService {
     }
 
     return { reported: true, hidden };
+  }
+
+  private async reportMysql(params: { spotId: string; reporterId: string; reason: string; detail?: string }): Promise<{ reported: true; hidden: boolean }> {
+    return this.db.withTransaction(async client => {
+      const spot = (await client.query<{ id: string; user_id: string; status: string }>(
+        'SELECT id, user_id, status FROM spots WHERE id = $1 FOR UPDATE', [params.spotId])).rows[0];
+      if (!spot || spot.status === 'deleted') throw AppException.notFound('该打卡点不存在或已被删除');
+      if (spot.user_id === params.reporterId) throw AppException.badRequest('不能举报自己发布的机位');
+      try {
+        await client.query(`INSERT INTO spot_reports (id, spot_id, reporter_id, reason, detail)
+          VALUES ($1, $2, $3, $4, $5)`, [randomUUID(), params.spotId, params.reporterId, params.reason, params.detail ?? null]);
+      } catch (error) {
+        if ((error as { code?: string }).code === 'ER_DUP_ENTRY') throw AppException.badRequest('你已经举报过这个机位了');
+        throw error;
+      }
+      const count = (await client.query<{ n: number }>('SELECT count(*) AS n FROM spot_reports WHERE spot_id = $1', [params.spotId])).rows[0];
+      const hidden = Number(count.n) >= REPORT_HIDE_THRESHOLD;
+      if (hidden && spot.status === 'active') await client.query("UPDATE spots SET status = 'hidden', updated_at = now() WHERE id = $1", [params.spotId]);
+      return { reported: true, hidden };
+    });
   }
 
   /** 运营：查看举报（默认只看待处理的） */

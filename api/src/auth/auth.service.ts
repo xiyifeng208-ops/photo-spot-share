@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AppException } from '../common/errors';
 import { APP_CONFIG } from '../config/configuration';
 import type { AppConfig } from '../config/configuration';
@@ -47,6 +48,12 @@ export class AuthService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<UserProfile> {
+    if (this.db.isMysql) {
+      await this.db.query(`UPDATE users SET nickname = COALESCE($2, nickname),
+        avatar_url = COALESCE($3, avatar_url), updated_at = now() WHERE id = $1`,
+      [userId, dto.nickname?.trim() ?? null, dto.avatarUrl ?? null]);
+      return this.getProfile(userId);
+    }
     const user = await this.db.queryOne<UserRow>(
       `UPDATE users
          SET nickname = COALESCE($2, nickname),
@@ -77,6 +84,14 @@ export class AuthService {
   }
 
   private async upsertUser(openid: string): Promise<UserRow> {
+    if (this.db.isMysql) {
+      await this.db.query(`INSERT INTO users (id, openid) VALUES ($1, $2)
+        ON DUPLICATE KEY UPDATE updated_at = now()`, [randomUUID(), openid]);
+      const row = await this.db.queryOne<UserRow>(
+        'SELECT id, openid, nickname, avatar_url, created_at FROM users WHERE openid = $1', [openid]);
+      if (!row) throw new AppException('INTERNAL_ERROR', '创建用户失败', 500);
+      return row;
+    }
     const user = await this.db.queryOne<UserRow>(
       `INSERT INTO users (openid)
        VALUES ($1)

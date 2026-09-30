@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { PoolClient } from 'pg';
+import { randomUUID } from 'node:crypto';
+import type { DatabaseClient } from '../database/database.service';
 import {
   BEST_TIME_LABELS,
   DIFFICULTY_LABELS,
@@ -50,7 +51,7 @@ interface SpotRow {
   difficulty: number;
   access_note: string | null;
   cover_photo_id: string | null;
-  status: 'active' | 'hidden' | 'deleted';
+  status: 'active' | 'pending' | 'hidden' | 'deleted';
   view_count: number;
   created_at: Date;
   updated_at: Date;
@@ -148,6 +149,41 @@ function toStringArray(value: unknown): string[] {
 export class SpotsService {
   private readonly logger = new Logger(SpotsService.name);
 
+  private get spotSelect(): string {
+    return this.db.isMysql ? `SELECT s.*, u.nickname, u.avatar_url, cp.object_key AS cover_key
+      FROM spots s JOIN users u ON u.id = s.user_id
+      LEFT JOIN photos cp ON cp.id = s.cover_photo_id` : SPOT_SELECT;
+  }
+
+  private async hydrate(rows: SpotRow[]) {
+    if (!this.db.isMysql || !rows.length) return;
+    const ids = rows.map(row => row.id);
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const times = await this.db.query<{ spot_id: string; best_time: BestTime }>(
+      `SELECT spot_id, best_time FROM spot_best_times WHERE spot_id IN (${placeholders}) ORDER BY sort_order`, ids);
+    const seasons = await this.db.query<{ spot_id: string; season: Season }>(
+      `SELECT spot_id, season FROM spot_best_seasons WHERE spot_id IN (${placeholders}) ORDER BY sort_order`, ids);
+    for (const row of rows) {
+      row.best_times = times.rows.filter(item => item.spot_id === row.id).map(item => item.best_time);
+      row.best_seasons = seasons.rows.filter(item => item.spot_id === row.id).map(item => item.season);
+    }
+  }
+
+  private async saveSelections(client: DatabaseClient, id: string, dto: { bestTimes?: BestTime[]; bestSeasons?: Season[] }) {
+    if (!this.db.isMysql) return;
+    for (const [table, column, values] of [
+      ['spot_best_times', 'best_time', dto.bestTimes],
+      ['spot_best_seasons', 'season', dto.bestSeasons],
+    ] as const) {
+      if (values == null) continue;
+      if (new Set(values).size !== values.length) throw AppException.badRequest('推荐时段或季节不能重复');
+      await client.query(`DELETE FROM ${table} WHERE spot_id = $1`, [id]);
+      for (const [order, value] of values.entries()) {
+        await client.query(`INSERT INTO ${table} (spot_id, ${column}, sort_order) VALUES ($1, $2, $3)`, [id, value, order]);
+      }
+    }
+  }
+
   constructor(
     private readonly db: DatabaseService,
     private readonly storage: StorageService,
@@ -180,13 +216,17 @@ export class SpotsService {
     }
 
     const { rows } = await this.db.query<SpotRow>(
-      `${SPOT_SELECT}
+      this.db.isMysql ? `${this.spotSelect} WHERE s.status = 'active'
+        AND MBRIntersects(s.location, ST_GeomFromText($1, 0))
+        ORDER BY s.created_at DESC LIMIT $2` : `${this.spotSelect}
         WHERE s.status = 'active'
           AND s.location && ST_MakeEnvelope($1, $2, $3, $4, 4326)::geography
         ORDER BY s.created_at DESC
         LIMIT $5`,
-      [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat, limit],
+      this.db.isMysql ? [bboxToWkt(bbox), limit] : [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat, limit],
     );
+
+    await this.hydrate(rows);
 
     return {
       mode: 'points',
@@ -199,7 +239,10 @@ export class SpotsService {
 
   private async findClusters(bbox: Bbox, limit: number): Promise<ClusterPoint[]> {
     const { rows } = await this.db.query<ClusterRow>(
-      `SELECT COALESCE(s.city, '未知地区') AS city,
+      this.db.isMysql ? `SELECT COALESCE(s.city, '未知地区') AS city,
+        count(*) AS count, avg(s.lat) AS lat, avg(s.lng) AS lng FROM spots s
+        WHERE s.status = 'active' AND MBRIntersects(s.location, ST_GeomFromText($1, 0))
+        GROUP BY COALESCE(s.city, '未知地区') ORDER BY count DESC LIMIT $2` : `SELECT COALESCE(s.city, '未知地区') AS city,
               count(*)::int AS count,
               avg(s.lat) AS lat,
               avg(s.lng) AS lng
@@ -209,19 +252,19 @@ export class SpotsService {
         GROUP BY COALESCE(s.city, '未知地区')
         ORDER BY count DESC
         LIMIT $5`,
-      [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat, limit],
+      this.db.isMysql ? [bboxToWkt(bbox), limit] : [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat, limit],
     );
 
     return rows.map((row) => ({
       city: row.city,
-      count: row.count,
+      count: Number(row.count),
       lat: Number(row.lat),
       lng: Number(row.lng),
     }));
   }
 
   async findDetail(id: string, viewerId?: string, viewer?: LatLng | null): Promise<SpotDetail> {
-    const row = await this.db.queryOne<SpotRow>(`${SPOT_SELECT} WHERE s.id = $1`, [id]);
+    const row = await this.db.queryOne<SpotRow>(`${this.spotSelect} WHERE s.id = $1`, [id]);
     if (!row || row.status === 'deleted') {
       throw AppException.notFound('该打卡点不存在或已被删除');
     }
@@ -229,6 +272,7 @@ export class SpotsService {
     if (row.status !== 'active' && row.user_id !== viewerId) {
       throw AppException.notFound('该打卡点正在审核中');
     }
+    await this.hydrate([row]);
 
     const { rows: photos } = await this.db.query<PhotoRow>(
       `SELECT id, object_key, width, height, sort_order
@@ -238,7 +282,9 @@ export class SpotsService {
 
     // 浏览量用异步自增，失败不影响详情读取
     this.db
-      .query('UPDATE spots SET view_count = view_count + 1 WHERE id = $1', [id])
+      .query(this.db.isMysql
+        ? 'UPDATE spots SET view_count = view_count + 1, updated_at = updated_at WHERE id = $1'
+        : 'UPDATE spots SET view_count = view_count + 1 WHERE id = $1', [id])
       .catch((error: Error) => this.logger.warn(`浏览量自增失败: ${error.message}`));
 
     const summary = this.toSummary(row, viewer);
@@ -254,7 +300,7 @@ export class SpotsService {
       focalLength: row.focal_length,
       focalLengthLabel: row.focal_length ? FOCAL_LENGTH_LABELS[row.focal_length] : null,
       accessNote: row.access_note,
-      viewCount: row.view_count + 1,
+      viewCount: Number(row.view_count) + 1,
       photos: photos.map((photo) => ({
         key: photo.object_key,
         url: this.storage.publicUrl(photo.object_key),
@@ -277,7 +323,10 @@ export class SpotsService {
     const cursor = decodeCursor(params.cursor);
 
     const { rows } = await this.db.query<SpotRow>(
-      `${SPOT_SELECT}
+      this.db.isMysql ? `${this.spotSelect} WHERE s.status = 'active'
+        AND ($1 IS NULL OR s.city = $1)
+        AND ($2 IS NULL OR s.created_at < $2 OR (s.created_at = $2 AND s.id < $3))
+        ORDER BY s.created_at DESC, s.id DESC LIMIT $4` : `${this.spotSelect}
         WHERE s.status = 'active'
           AND ($1::text IS NULL OR s.city = $1)
           AND (
@@ -286,9 +335,10 @@ export class SpotsService {
           )
         ORDER BY s.created_at DESC, s.id DESC
         LIMIT $4`,
-      [params.city?.trim() || null, cursor?.createdAt ?? null, cursor?.id ?? null, limit],
+      [params.city?.trim() || null, cursor ? (this.db.isMysql ? new Date(cursor.createdAt) : cursor.createdAt) : null, cursor?.id ?? null, limit],
     );
 
+    await this.hydrate(rows);
     const last = rows.at(-1);
     return {
       items: rows.map((row) => this.toSummary(row, params.viewer)),
@@ -308,15 +358,18 @@ export class SpotsService {
     const cursor = decodeCursor(cursorRaw);
 
     const { rows } = await this.db.query<SpotRow>(
-      `${SPOT_SELECT}
+      this.db.isMysql ? `${this.spotSelect} WHERE s.user_id = $1 AND s.status <> 'deleted'
+        AND ($2 IS NULL OR s.created_at < $2 OR (s.created_at = $2 AND s.id < $3))
+        ORDER BY s.created_at DESC, s.id DESC LIMIT $4` : `${this.spotSelect}
         WHERE s.user_id = $1
           AND s.status <> 'deleted'
           AND ($2::timestamptz IS NULL OR (s.created_at, s.id) < ($2::timestamptz, $3::uuid))
         ORDER BY s.created_at DESC, s.id DESC
         LIMIT $4`,
-      [userId, cursor?.createdAt ?? null, cursor?.id ?? null, limit],
+      [userId, cursor ? (this.db.isMysql ? new Date(cursor.createdAt) : cursor.createdAt) : null, cursor?.id ?? null, limit],
     );
 
+    await this.hydrate(rows);
     const last = rows.at(-1);
     return {
       items: rows.map((row) => this.toSummary(row)),
@@ -341,8 +394,11 @@ export class SpotsService {
     const spotId = await this.db.withTransaction(async (client) => {
       await this.uploads.assertUsableKeys(userId, dto.photoKeys, { client });
 
+      const mysqlId = randomUUID();
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO spots (
+        this.db.isMysql ? `INSERT INTO spots (id, user_id, title, description, location, lat, lng,
+          province, city, district, address, heading, focal_length, difficulty, access_note, status)
+          VALUES ($17, $1, $2, $3, POINT($5, $4), $4, $5, $6, $7, $8, $9, $10, $13, $14, $15, $16)` : `INSERT INTO spots (
            user_id, title, description, location, lat, lng,
            province, city, district, address,
            heading, best_times, best_seasons, focal_length, difficulty, access_note, status
@@ -368,26 +424,39 @@ export class SpotsService {
           dto.focalLength ?? null,
           dto.difficulty ?? 1,
           dto.accessNote?.trim() || null,
-          textStatus,
+          this.db.isMysql && textStatus === 'active' && this.contentCheck.mediaCheckReady ? 'pending' : textStatus,
+          ...(this.db.isMysql ? [mysqlId] : []),
         ],
       );
-      const id = rows[0].id;
+      const id = this.db.isMysql ? mysqlId : rows[0].id;
+      await this.saveSelections(client, id, dto);
       await this.attachPhotos(client, userId, id, dto.photoKeys);
       return id;
     });
 
-    // 文本通过后再送图片机审：提交成功就把机位挂在 pending，等回调转正
+    // MySQL 在创建事务内即挂为 pending，避免送审期间短暂公开。
     if (textStatus === 'active') {
-      const waiting = await this.contentCheckTasks.submitForSpot({
-        spotId,
-        openid: user.openid,
-        photoKeys: dto.photoKeys,
-      });
-      if (waiting) {
+      let waiting: boolean;
+      try {
+        waiting = await this.contentCheckTasks.submitForSpot({
+          spotId,
+          openid: user.openid,
+          photoKeys: dto.photoKeys,
+        });
+      } catch (error) {
+        if (this.db.isMysql) {
+          await this.db.query("UPDATE spots SET status = 'hidden' WHERE id = $1 AND status = 'pending'", [spotId]);
+        }
+        throw error;
+      }
+      if (waiting && !this.db.isMysql) {
         await this.db.query(
           `UPDATE spots SET status = 'pending', updated_at = now() WHERE id = $1`,
           [spotId],
         );
+      }
+      if (!waiting && this.db.isMysql) {
+        await this.db.query("UPDATE spots SET status = 'active' WHERE id = $1 AND status = 'pending'", [spotId]);
       }
     }
 
@@ -417,6 +486,10 @@ export class SpotsService {
         : null;
 
     await this.db.withTransaction(async (client) => {
+      if (this.db.isMysql) {
+        const locked = (await client.query<{ status: string }>('SELECT status FROM spots WHERE id = $1 FOR UPDATE', [id])).rows[0];
+        if (!locked || locked.status === 'deleted') throw AppException.notFound('该打卡点不存在或已被删除');
+      }
       if (dto.photoKeys) {
         await this.uploads.assertUsableKeys(userId, dto.photoKeys, {
           client,
@@ -425,7 +498,12 @@ export class SpotsService {
       }
 
       await client.query(
-        `UPDATE spots SET
+        this.db.isMysql ? `UPDATE spots SET title = COALESCE($2, title), description = COALESCE($3, description),
+          lat = COALESCE($4, lat), lng = COALESCE($5, lng), location = POINT(lng, lat),
+          province = COALESCE($6, province), city = COALESCE($7, city), district = COALESCE($8, district),
+          address = COALESCE($9, address), heading = COALESCE($10, heading),
+          focal_length = COALESCE($13, focal_length), difficulty = COALESCE($14, difficulty),
+          access_note = COALESCE($15, access_note), updated_at = now() WHERE id = $1` : `UPDATE spots SET
            title = COALESCE($2, title),
            description = COALESCE($3, description),
            lat = $4,
@@ -447,8 +525,8 @@ export class SpotsService {
           id,
           dto.title?.trim() ?? null,
           dto.description?.trim() ?? null,
-          nextLat,
-          nextLng,
+          this.db.isMysql ? dto.lat ?? null : nextLat,
+          this.db.isMysql ? dto.lng ?? null : nextLng,
           meta?.province ?? null,
           meta?.city ?? null,
           meta?.district ?? null,
@@ -462,6 +540,7 @@ export class SpotsService {
         ],
       );
 
+      await this.saveSelections(client, id, dto);
       if (dto.photoKeys) {
         await client.query('DELETE FROM photos WHERE spot_id = $1', [id]);
         await client.query(
@@ -496,21 +575,24 @@ export class SpotsService {
 
   /** 把票据对应的图片写成 photos 记录，并设置封面为第一张。 */
   private async attachPhotos(
-    client: PoolClient,
+    client: DatabaseClient,
     userId: string,
     spotId: string,
     keys: string[],
   ) {
     for (const [index, key] of keys.entries()) {
-      const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO photos (spot_id, user_id, object_key, mime, size_bytes, width, height, sort_order)
+      const mysqlId = randomUUID();
+      const { rows, rowCount } = await client.query<{ id: string }>(
+        this.db.isMysql ? `INSERT INTO photos (id, spot_id, user_id, object_key, mime, size_bytes, width, height, sort_order)
+          SELECT $5, $1, $2, t.object_key, t.mime, t.size_bytes, t.width, t.height, $4
+          FROM upload_tickets t WHERE t.object_key = $3` : `INSERT INTO photos (spot_id, user_id, object_key, mime, size_bytes, width, height, sort_order)
          SELECT $1, $2, t.object_key, t.mime, t.size_bytes, t.width, t.height, $4
            FROM upload_tickets t
           WHERE t.object_key = $3
          RETURNING id`,
-        [spotId, userId, key, index],
+        [spotId, userId, key, index, ...(this.db.isMysql ? [mysqlId] : [])],
       );
-      const photoId = rows[0]?.id;
+      const photoId = this.db.isMysql ? (rowCount === 1 ? mysqlId : null) : rows[0]?.id;
       if (!photoId) throw AppException.badRequest('图片未完成上传，请重新上传后再提交');
 
       await client.query(

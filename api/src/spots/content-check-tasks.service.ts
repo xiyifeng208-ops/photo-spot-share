@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { StorageService } from '../storage/storage.service';
@@ -47,6 +48,7 @@ export class ContentCheckTasksService {
       return false;
     }
 
+    if (this.db.isMysql) return this.submitMysqlTasks(params);
     let submitted = 0;
     for (const key of params.photoKeys) {
       const mediaUrl = this.storage.publicUrl(key);
@@ -80,7 +82,7 @@ export class ContentCheckTasksService {
     if (task.status !== 'pending') return; // 幂等：重复回调直接忽略
 
     await this.db.query(
-      `UPDATE content_check_tasks SET status = $2, detail = $3, updated_at = now() WHERE id = $1`,
+      `UPDATE content_check_tasks SET status = $2, detail = $3, updated_at = now() WHERE id = $1 AND status = 'pending'`,
       [task.id, verdict, label === undefined ? null : `label=${label}`],
     );
     await this.recomputeSpot(task.spot_id);
@@ -94,7 +96,15 @@ export class ContentCheckTasksService {
   }
 
   async sweepTimeouts(): Promise<number> {
-    const { rows } = await this.db.query<TaskRow>(
+    const { rows } = this.db.isMysql ? await this.db.withTransaction(async client => {
+      const result = await client.query<TaskRow>(`SELECT id, spot_id, trace_id, status FROM content_check_tasks
+        WHERE status = 'pending' AND created_at < TIMESTAMPADD(MINUTE, -$1, now()) FOR UPDATE`, [PENDING_TIMEOUT_MINUTES]);
+      for (const row of result.rows) {
+        await client.query(`UPDATE content_check_tasks SET status = 'failed', detail = '回调超时', updated_at = now()
+          WHERE id = $1 AND status = 'pending'`, [row.id]);
+      }
+      return result;
+    }) : await this.db.query<TaskRow>(
       `UPDATE content_check_tasks
           SET status = 'failed', detail = '回调超时', updated_at = now()
         WHERE status = 'pending'
@@ -108,6 +118,25 @@ export class ContentCheckTasksService {
       await this.recomputeSpot(row.spot_id);
     }
     return rows.length;
+  }
+
+  private async submitMysqlTasks(params: { spotId: string; openid: string; photoKeys: string[] }): Promise<boolean> {
+    // Register every task first: a fast callback must not publish a partially submitted set.
+    const tasks = params.photoKeys.map(key => ({ id: randomUUID(), key }));
+    await this.db.withTransaction(async client => {
+      for (const task of tasks) await client.query(
+        "INSERT INTO content_check_tasks (id, spot_id, status) VALUES ($1, $2, 'pending')", [task.id, params.spotId]);
+    });
+    for (const task of tasks) {
+      let traceId: string | null = null;
+      try { traceId = await this.contentCheck.submitMediaCheck(params.openid, this.storage.publicUrl(task.key)); }
+      catch { this.logger.warn('图片机审提交失败，机位保持非公开'); }
+      await this.db.query(`UPDATE content_check_tasks SET trace_id = $2, status = $3,
+        detail = $4 WHERE id = $1 AND status = 'pending'`,
+      [task.id, traceId, traceId ? 'pending' : 'failed', traceId ? null : '提交失败']);
+    }
+    await this.recomputeSpot(params.spotId);
+    return true;
   }
 
   /** 按该机位所有图片任务的状态，决定机位是 active / hidden / 继续 pending。 */

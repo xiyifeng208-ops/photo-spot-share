@@ -486,7 +486,7 @@ UPDATE spots SET view_count = view_count + 1 WHERE id = ?;
 
 ## 10. MySQL 参考 DDL
 
-以下 DDL 是设计参考，不应在本阶段直接执行。正式迁移时应拆成可回滚、带校验和的迁移文件。
+以下 DDL 是设计参考。可执行初始脚本见 `api/mysql-migrations/0001_mysql_baseline.sql`，执行前后检查见 `tools/mysql/`，操作步骤见 `api/mysql-migrations/README.md`。MySQL DDL 会隐式提交，多条建表语句不能靠一个事务整体回滚；正式迁移器需要校验和、遇错停止和部分失败恢复机制。
 
 ```sql
 CREATE TABLE users (
@@ -851,4 +851,3 @@ ERROR_FOR_DIVISION_BY_ZERO
 - [MySQL 8.0：CHECK Constraints](https://dev.mysql.com/doc/refman/8.0/en/create-table.html)
 - [MySQL 8.0：DATE、DATETIME 与 TIMESTAMP](https://dev.mysql.com/doc/refman/8.0/en/datetime.html)
 - [MySQL 8.0：JSON Data Type](https://dev.mysql.com/doc/refman/8.0/en/json.html)
-

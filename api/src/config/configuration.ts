@@ -5,6 +5,8 @@ export interface AppConfig {
   database: {
     url: string;
     ssl: boolean;
+    sslCa?: string;
+    allowInsecureRemote?: boolean;
     poolMax: number;
   };
   auth: {
@@ -64,6 +66,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     database: {
       url: env.DATABASE_URL ?? 'postgres://spot:spot@localhost:5432/spot',
       ssl: bool(env.DATABASE_SSL, false),
+      sslCa: env.DATABASE_SSL_CA || undefined,
+      allowInsecureRemote: bool(env.DATABASE_ALLOW_INSECURE_REMOTE, false),
       poolMax: int(env.DATABASE_POOL_MAX, 10),
     },
     auth: {

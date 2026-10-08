@@ -3,6 +3,8 @@ import { Cron } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
 import { StorageService } from '../storage/storage.service';
 import { ContentCheckService, type MediaCheckVerdict } from './content-check.service';
+import { sqlFor } from '../database/sql';
+import { randomUUID } from 'node:crypto';
 
 /** 回调迟迟不来时，超过这个时间就按"检测失败"处理（fail-closed，转 hidden 待人工确认）。 */
 const PENDING_TIMEOUT_MINUTES = 10;
@@ -53,9 +55,10 @@ export class ContentCheckTasksService {
       const traceId = await this.contentCheck.submitMediaCheck(params.openid, mediaUrl);
       if (!traceId) continue;
       await this.db.query(
-        `INSERT INTO content_check_tasks (spot_id, trace_id, status)
+        sqlFor(this.db, `INSERT INTO content_check_tasks (spot_id, trace_id, status)
          VALUES ($1, $2, 'pending')`,
-        [params.spotId, traceId],
+        `INSERT INTO content_check_tasks (spot_id, trace_id, status, id) VALUES ($1, $2, 'pending', $3)`),
+        [params.spotId, traceId, ...(this.db.isMysql ? [randomUUID()] : [])],
       );
       submitted += 1;
     }
@@ -94,6 +97,20 @@ export class ContentCheckTasksService {
   }
 
   async sweepTimeouts(): Promise<number> {
+    if (this.db.isMysql) {
+      const rows = await this.db.withTransaction(async client => {
+        const selected = await client.query<TaskRow>(`SELECT id, spot_id, trace_id, status
+          FROM content_check_tasks WHERE status = 'pending'
+          AND created_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL $1 MINUTE) FOR UPDATE`, [PENDING_TIMEOUT_MINUTES]);
+        for (const row of selected.rows) {
+          await client.query(`UPDATE content_check_tasks SET status = 'failed', detail = '回调超时',
+            updated_at = UTC_TIMESTAMP(6) WHERE id = $1`, [row.id]);
+        }
+        return selected.rows;
+      });
+      for (const row of rows) await this.recomputeSpot(row.spot_id);
+      return rows.length;
+    }
     const { rows } = await this.db.query<TaskRow>(
       `UPDATE content_check_tasks
           SET status = 'failed', detail = '回调超时', updated_at = now()

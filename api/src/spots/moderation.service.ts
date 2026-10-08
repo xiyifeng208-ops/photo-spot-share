@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppException } from '../common/errors';
 import { DatabaseService } from '../database/database.service';
+import { sqlFor } from '../database/sql';
+import { randomUUID } from 'node:crypto';
 
 /** 达到这个数量的不同用户举报，机位自动下线待人工复核。 */
 export const REPORT_HIDE_THRESHOLD = 3;
@@ -47,7 +49,17 @@ export class ModerationService {
       throw AppException.badRequest('不能举报自己发布的机位');
     }
 
-    const inserted = await this.db.query<{ id: string }>(
+    let inserted: { rowCount: number | null };
+    if (this.db.isMysql) {
+      try {
+        inserted = await this.db.query(`INSERT INTO spot_reports (spot_id, reporter_id, reason, detail, id)
+          VALUES ($1, $2, $3, $4, $5)`,
+        [params.spotId, params.reporterId, params.reason, params.detail ?? null, randomUUID()]);
+      } catch (error) {
+        if ((error as { code?: string }).code === 'ER_DUP_ENTRY') throw AppException.badRequest('你已经举报过这个机位了');
+        throw error;
+      }
+    } else inserted = await this.db.query<{ id: string }>(
       `INSERT INTO spot_reports (spot_id, reporter_id, reason, detail)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT ON CONSTRAINT spot_reports_once DO NOTHING
@@ -59,10 +71,11 @@ export class ModerationService {
     }
 
     const count = await this.db.queryOne<{ n: number }>(
-      'SELECT count(DISTINCT reporter_id)::int AS n FROM spot_reports WHERE spot_id = $1',
+      sqlFor(this.db, 'SELECT count(DISTINCT reporter_id)::int AS n FROM spot_reports WHERE spot_id = $1',
+        'SELECT count(DISTINCT reporter_id) AS n FROM spot_reports WHERE spot_id = $1'),
       [params.spotId],
     );
-    const hidden = (count?.n ?? 0) >= REPORT_HIDE_THRESHOLD;
+    const hidden = Number(count?.n ?? 0) >= REPORT_HIDE_THRESHOLD;
     if (hidden && spot.status === 'active') {
       await this.setStatus(params.spotId, 'hidden');
       this.logger.warn(`机位 ${params.spotId} 被 ${count?.n} 个用户举报，已自动下线`);

@@ -4,6 +4,8 @@ dist/
 .env.local
 var/
 coverage/
+backups/
+.env.mysql.local
 *.log
 .DS_Store
 miniprogram/miniprogram_npm/

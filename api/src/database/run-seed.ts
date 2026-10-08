@@ -8,6 +8,7 @@ loadEnv();
 
 async function main() {
   const config = loadConfig();
+  if (config.database.url.startsWith('mysql://')) throw new Error('seed 仅用于 PostgreSQL；MySQL 请使用 import:mysql 迁入原始数据，避免覆盖或重复');
   const client = new Client({ connectionString: config.database.url });
   await client.connect();
   try {

@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { PoolClient } from 'pg';
+import type { DatabaseClient } from '../database/database.service';
+import { sqlFor } from '../database/sql';
+import { randomUUID } from 'node:crypto';
 import { AppException } from '../common/errors';
 import { APP_CONFIG } from '../config/configuration';
 import type { AppConfig } from '../config/configuration';
@@ -48,13 +50,17 @@ export class UploadsService {
       for (const [index, key] of signed.keys.entries()) {
         const item = items[index];
         await client.query(
-          `INSERT INTO upload_tickets (user_id, object_key, mime, size_bytes, width, height)
+          sqlFor(this.db, `INSERT INTO upload_tickets (user_id, object_key, mime, size_bytes, width, height)
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (object_key) DO UPDATE
              SET mime = EXCLUDED.mime,
                  size_bytes = EXCLUDED.size_bytes,
                  width = EXCLUDED.width,
                  height = EXCLUDED.height`,
+          `INSERT INTO upload_tickets (user_id, object_key, mime, size_bytes, width, height, id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) AS new
+           ON DUPLICATE KEY UPDATE mime = new.mime, size_bytes = new.size_bytes,
+             width = new.width, height = new.height`),
           [
             userId,
             key,
@@ -62,6 +68,7 @@ export class UploadsService {
             item?.size ?? null,
             item?.width ?? null,
             item?.height ?? null,
+            ...(this.db.isMysql ? [randomUUID()] : []),
           ],
         );
       }
@@ -124,7 +131,7 @@ export class UploadsService {
   async assertUsableKeys(
     userId: string,
     keys: string[],
-    options: { client?: PoolClient; allowSpotId?: string } = {},
+    options: { client?: DatabaseClient; allowSpotId?: string } = {},
   ) {
     const { client, allowSpotId } = options;
     if (keys.length === 0) return;
@@ -141,12 +148,15 @@ export class UploadsService {
       }
     }
 
-    const sql = `SELECT id, user_id, object_key, spot_id
+    const sql = sqlFor(this.db, `SELECT id, user_id, object_key, spot_id
                    FROM upload_tickets
-                  WHERE object_key = ANY($1::text[])`;
+                  WHERE object_key = ANY($1::text[])`,
+      `SELECT id, user_id, object_key, spot_id FROM upload_tickets
+       WHERE object_key IN (${unique.map((_, i) => `$${i + 1}`).join(',')})`);
+    const queryParams = this.db.isMysql ? unique : [unique];
     const { rows } = client
-      ? await client.query<UploadTicketRow>(sql, [unique])
-      : await this.db.query<UploadTicketRow>(sql, [unique]);
+      ? await client.query<UploadTicketRow>(sql, queryParams)
+      : await this.db.query<UploadTicketRow>(sql, queryParams);
 
     if (rows.length !== unique.length) {
       throw AppException.badRequest('部分图片未完成上传，请重试');
@@ -162,11 +172,13 @@ export class UploadsService {
   /** 清理超过 TTL 仍未发布的图片：先删对象存储，再删票据。 */
   async cleanupOrphans(ttlHours = ORPHAN_TICKET_TTL_HOURS): Promise<{ removed: number }> {
     const { rows } = await this.db.query<{ object_key: string; id: string }>(
-      `SELECT id, object_key
+      sqlFor(this.db, `SELECT id, object_key
          FROM upload_tickets
         WHERE spot_id IS NULL
           AND created_at < now() - ($1 || ' hours')::interval
         LIMIT 500`,
+      `SELECT id, object_key FROM upload_tickets WHERE spot_id IS NULL
+       AND created_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL $1 HOUR) LIMIT 500`),
       [ttlHours],
     );
 

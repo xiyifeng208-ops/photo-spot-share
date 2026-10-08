@@ -6,6 +6,7 @@ import { DatabaseService } from '../database/database.service';
 import { TokenService } from './token.service';
 import { WechatService } from './wechat.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { randomUUID } from 'node:crypto';
 
 export interface UserProfile {
   id: string;
@@ -47,6 +48,12 @@ export class AuthService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<UserProfile> {
+    if (this.db.isMysql) {
+      await this.db.query(`UPDATE users SET nickname = COALESCE($2, nickname),
+        avatar_url = COALESCE($3, avatar_url), updated_at = UTC_TIMESTAMP(6) WHERE id = $1`,
+      [userId, dto.nickname?.trim() ?? null, dto.avatarUrl ?? null]);
+      return this.getProfile(userId);
+    }
     const user = await this.db.queryOne<UserRow>(
       `UPDATE users
          SET nickname = COALESCE($2, nickname),
@@ -77,6 +84,14 @@ export class AuthService {
   }
 
   private async upsertUser(openid: string): Promise<UserRow> {
+    if (this.db.isMysql) {
+      await this.db.query(`INSERT INTO users (id, openid) VALUES ($1, $2)
+        ON DUPLICATE KEY UPDATE updated_at = UTC_TIMESTAMP(6)`, [randomUUID(), openid]);
+      const user = await this.db.queryOne<UserRow>(
+        'SELECT id, openid, nickname, avatar_url, created_at FROM users WHERE openid = $1', [openid]);
+      if (!user) throw new AppException('INTERNAL_ERROR', '创建用户失败', 500);
+      return user;
+    }
     const user = await this.db.queryOne<UserRow>(
       `INSERT INTO users (openid)
        VALUES ($1)

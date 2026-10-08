@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import { runMysqlMigrations } from './mysql-migration-runner';
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'migrations');
 
@@ -8,7 +9,8 @@ const MIGRATIONS_DIR = join(__dirname, '..', '..', 'migrations');
  * 极简迁移器：按文件名排序执行 migrations/*.sql，
  * 已执行过的记录在 schema_migrations 表里，支持重复运行。
  */
-export async function runMigrations(connectionString: string, logger = console.log) {
+export async function runMigrations(connectionString: string, logger = console.log, ssl = false) {
+  if (connectionString.startsWith('mysql://')) return runMysqlMigrations(connectionString, ssl, logger);
   const client = new Client({ connectionString });
   await client.connect();
 

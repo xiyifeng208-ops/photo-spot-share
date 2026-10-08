@@ -17,6 +17,10 @@ import { AppModule } from '../app.module';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from '../common/interceptors/response.interceptor';
 import { runMigrations } from '../database/migration-runner';
+import { DatabaseService } from '../database/database.service';
+import { ContentCheckTasksService } from './content-check-tasks.service';
+import { UploadsService } from '../uploads/uploads.service';
+import { randomUUID } from 'node:crypto';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDb = testDatabaseUrl ? describe : describe.skip;
@@ -27,6 +31,7 @@ describeWithDb('打卡点全链路 (e2e)', () => {
   let token: string;
   let otherToken: string;
   let spotId: string;
+  let photoKey: string;
 
   const shanghai = { lat: 31.2397, lng: 121.4903 };
   const bbox = '121.4,31.2,121.6,31.4';
@@ -95,6 +100,15 @@ describeWithDb('打卡点全链路 (e2e)', () => {
     expect(res.body.error.message).toBeTruthy();
   });
 
+  it('修改用户资料后重复登录仍使用同一账号', async () => {
+    const updated = await request(app.getHttpServer()).patch(`${api}/auth/me`)
+      .set('Authorization', `Bearer ${token}`).send({ nickname: '迁移测试📷' }).expect(200);
+    const login = await request(app.getHttpServer()).post(`${api}/auth/wx-login`)
+      .send({ code: 'dev:e2e-owner' }).expect(201);
+    expect(login.body.data.user.id).toBe(updated.body.data.id);
+    expect(login.body.data.user.nickname).toBe('迁移测试📷');
+  });
+
   it('境外坐标被拒绝', async () => {
     await request(app.getHttpServer())
       .post(`${api}/spots`)
@@ -118,6 +132,7 @@ describeWithDb('打卡点全链路 (e2e)', () => {
     const signed = signRes.body.data;
     expect(signed.driver).toBe('local');
     const key = signed.keys[0];
+    photoKey = key;
 
     // 上传地址必须跟着请求来源走：手机用局域网 IP 访问时不能拿到 localhost
     expect(signed.uploadUrl).toContain('/api/v1/uploads/local');
@@ -184,6 +199,67 @@ describeWithDb('打卡点全链路 (e2e)', () => {
 
     const second = await request(app.getHttpServer()).get(`${api}/spots/${spotId}`).expect(200);
     expect(second.body.data.viewCount).toBeGreaterThan(first.body.data.viewCount);
+  });
+
+  it('编辑坐标和 JSON 数组、重新绑定照片，保持封面与票据关联', async () => {
+    const updated = await request(app.getHttpServer()).patch(`${api}/spots/${spotId}`)
+      .set('Authorization', `Bearer ${token}`).send({
+        lat: shanghai.lat + 0.001, lng: shanghai.lng + 0.001,
+        bestTimes: ['morning', 'night'], bestSeasons: [], photoKeys: [photoKey],
+        geo: { city: '上海市', address: '编辑后的测试地址' },
+      }).expect(200);
+    expect(updated.body.data.bestTimes).toEqual(['morning', 'night']);
+    expect(updated.body.data.bestSeasons).toEqual([]);
+    expect(updated.body.data.photos[0].key).toBe(photoKey);
+    expect(updated.body.data.coverUrl).toContain(photoKey);
+    const mine = await request(app.getHttpServer()).get(`${api}/spots/mine?limit=1`)
+      .set('Authorization', `Bearer ${token}`).expect(200);
+    expect(mine.body.data.items[0].id).toBe(spotId);
+    const next = await request(app.getHttpServer()).get(`${api}/spots/mine`)
+      .query({ cursor: mine.body.data.nextCursor, limit: 1 })
+      .set('Authorization', `Bearer ${token}`).expect(200);
+    expect(next.body.data.items.some((item: { id: string }) => item.id === spotId)).toBe(false);
+  });
+
+  it('审核超时后隐藏机位，并可恢复用于后续测试', async () => {
+    const db = app.get(DatabaseService);
+    await db.query(`UPDATE spots SET status = 'pending' WHERE id = $1`, [spotId]);
+    await db.query(`INSERT INTO content_check_tasks (id, spot_id, trace_id, created_at)
+      VALUES ($1, $2, $3, $4)`, [randomUUID(), spotId, 'e2e-expired-' + spotId, new Date('2020-01-01T00:00:00Z')]);
+    expect(await app.get(ContentCheckTasksService).sweepTimeouts()).toBeGreaterThan(0);
+    expect((await db.queryOne<{ status: string }>('SELECT status FROM spots WHERE id=$1', [spotId]))?.status).toBe('hidden');
+    await db.query(`UPDATE spots SET status = 'active' WHERE id=$1`, [spotId]);
+    // Exercise the dialect-specific interval query without deleting the published ticket.
+    expect(await app.get(UploadsService).cleanupOrphans(100000)).toHaveProperty('removed');
+  });
+
+  it('不同用户可举报一次，重复举报明确返回 400', async () => {
+    const send = () => request(app.getHttpServer()).post(`${api}/spots/${spotId}/report`)
+      .set('Authorization', `Bearer ${otherToken}`).send({ reason: '其他', detail: '测试举报' });
+    await send().expect(201);
+    await send().expect(400);
+  });
+
+  it('同一毫秒内的两个机位分页时不遗漏第二条', async () => {
+    const db = app.get(DatabaseService);
+    const owner = await db.queryOne<{ user_id: string }>('SELECT user_id FROM spots WHERE id=$1', [spotId]);
+    const ids = [randomUUID(), randomUUID()];
+    const city = '精度测试-' + ids[0];
+    try {
+      for (const [index, id] of ids.entries()) {
+        const timestamp = `2030-01-01${db.isMysql ? ' ' : 'T'}00:00:00.${index === 0 ? '123457' : '123456'}${db.isMysql ? '' : 'Z'}`;
+        const point = db.isMysql ? 'POINT(121.49,31.24)' : 'ST_SetSRID(ST_MakePoint(121.49,31.24),4326)::geography';
+        await db.query(`INSERT INTO spots (id,user_id,title,location,lat,lng,city,created_at)
+          VALUES ($1,$2,$3,${point},31.24,121.49,$4,$5)`, [id, owner!.user_id, '微秒分页测试', city, timestamp]);
+      }
+      const first = await request(app.getHttpServer()).get(`${api}/spots/feed`).query({ city, limit: 1 }).expect(200);
+      expect(first.body.data.items[0].id).toBe(ids[0]);
+      const second = await request(app.getHttpServer()).get(`${api}/spots/feed`)
+        .query({ city, limit: 1, cursor: first.body.data.nextCursor }).expect(200);
+      expect(second.body.data.items[0].id).toBe(ids[1]);
+    } finally {
+      for (const id of ids) await db.query('DELETE FROM spots WHERE id=$1', [id]);
+    }
   });
 
   it('他人不能删除，作者可以删除，删除后地图不可见', async () => {

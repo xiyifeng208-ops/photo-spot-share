@@ -6,7 +6,7 @@ loadEnv();
 
 async function main() {
   const config = loadConfig();
-  await runMigrations(config.database.url, (message) => console.log(`[migrate] ${message}`));
+  await runMigrations(config.database.url, (message) => console.log(`[migrate] ${message}`), config.database.ssl);
 }
 
 main().catch((error) => {

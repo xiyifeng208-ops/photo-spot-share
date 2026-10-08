@@ -64,7 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     database: {
       url: env.DATABASE_URL ?? 'postgres://spot:spot@localhost:5432/spot',
       ssl: bool(env.DATABASE_SSL, false),
-      poolMax: int(env.DATABASE_POOL_MAX, 10),
+      poolMax: int(env.DATABASE_POOL_MAX, env.DATABASE_URL?.startsWith('mysql://') ? 3 : 10),
     },
     auth: {
       jwtSecret: env.JWT_SECRET ?? 'dev-only-secret-change-me',
